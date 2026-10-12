@@ -6,13 +6,14 @@ using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.MediaEncoding;
+using MediaBrowser.Controller.Plugins;
 using MediaBrowser.Model.Logging;
 using MediaBrowser.Model.Plugins;
 using MediaBrowser.Model.Serialization;
 
 namespace HallPass;
 
-public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
+public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages, IServerEntryPoint
 {
 	private readonly ILogger _logger;
 
@@ -45,6 +46,17 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 		SubtitleEncoder = subtitleEncoder;
 		FfmpegManager = ffmpegManager;
 		_logger = logManager.GetLogger("HallPass");
+	}
+
+	/// <summary>Called when the server has started: begins watching for new tracks.</summary>
+	public void Run()
+	{
+		AutoScan.Start();
+	}
+
+	public void Dispose()
+	{
+		AutoScan.Stop();
 	}
 
 	/// <summary>Writes a line to Emby's log.</summary>

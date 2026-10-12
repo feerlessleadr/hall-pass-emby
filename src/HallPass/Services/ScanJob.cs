@@ -77,9 +77,31 @@ internal static class ScanJob
 			_cts = new CancellationTokenSource();
 			_status = new ScanStatus { State = "Running", Force = force, StartedUtc = DateTime.UtcNow, Message = "Starting" };
 			CancellationToken token = _cts.Token;
-			Task.Run(() => RunAsync(force, token));
+			Task.Run(() => RunAsync(force, token, null));
 			return _status;
 		}
+	}
+
+	/// <summary>
+	/// Runs a scan of new and changed tracks inside Emby's scheduled task and waits for it. Skipped (and logged) when another job is running.
+	/// Cancelling the task cancels the scan.
+	/// </summary>
+	public static async Task RunScheduledAsync(IProgress<double> progress, CancellationToken token)
+	{
+		CancellationToken own;
+		lock (Gate)
+		{
+			if (!JobGate.TryEnter("scan"))
+			{
+				Plugin.Log("The scheduled scan was skipped: a " + JobGate.Running + " job is running.");
+				return;
+			}
+			_cts = new CancellationTokenSource();
+			_status = new ScanStatus { State = "Running", Force = false, StartedUtc = DateTime.UtcNow, Message = "Starting (scheduled)" };
+			own = _cts.Token;
+		}
+		using CancellationTokenSource linked = CancellationTokenSource.CreateLinkedTokenSource(own, token);
+		await RunAsync(false, linked.Token, progress).ConfigureAwait(false);
 	}
 
 	public static void Cancel()
@@ -98,7 +120,7 @@ internal static class ScanJob
 		}
 	}
 
-	private static async Task RunAsync(bool force, CancellationToken token)
+	private static async Task RunAsync(bool force, CancellationToken token, IProgress<double>? progress)
 	{
 		int processed = 0;
 		int scanned = 0;
@@ -148,6 +170,7 @@ internal static class ScanJob
 				{
 					int p = processed, sc = scanned, un = unchanged, fa = failed;
 					Update((ScanStatus s) => Copy(s, processed: p, scanned: sc, unchanged: un, failed: fa));
+					progress?.Report(total == 0 ? 100.0 : 100.0 * p / total);
 					await Task.Yield();
 				}
 				if (processed % 200 == 0)

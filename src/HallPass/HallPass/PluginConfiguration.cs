@@ -43,6 +43,12 @@ public class PluginConfiguration : BasePluginConfiguration
 
 	public int BatchDelayMs { get; set; } = 50;
 
+	/// <summary>Look at newly added tracks by themselves (after things have been quiet for a while). Records decisions; writes tags only when <see cref="ApplyAfterScan"/> is on and dry run is off.</summary>
+	public bool AutoScanNewTracks { get; set; } = true;
+
+	/// <summary>After a scheduled or automatic scan, also write the tags (only with dry run off). Off: tags change only when you press Apply decisions.</summary>
+	public bool ApplyAfterScan { get; set; }
+
 	/// <summary>Read each file's own tags with Emby's ffprobe: the advisory flag (when a file has one) and the ISRC and album barcode used for online lookups.</summary>
 	public bool ReadFileTags { get; set; } = true;
 

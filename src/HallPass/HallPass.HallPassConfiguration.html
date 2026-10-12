@@ -181,6 +181,19 @@
                     </div>
 
                     <div class="paper-card" style="padding: 1.5em; margin-top: 1.5em;">
+                        <h3 style="margin-top: 0;">Keeping up to date</h3>
+                        <div class="fieldDescription" style="margin-bottom: 1em;">Hall Pass adds a scheduled task, <strong>Dashboard &gt; Scheduled Tasks &gt; Hall Pass &gt; Scan music for explicit content</strong>, that runs every night at 3:30 and looks only at new or changed tracks. Change or remove its schedule there like any other task.</div>
+                        <div class="checkboxContainer">
+                            <label><input is="emby-checkbox" type="checkbox" id="hpAutoScan" /><span>Look at new tracks by themselves</span></label>
+                            <div class="fieldDescription">When Emby adds music, Hall Pass waits until things have been quiet for half a minute and then looks at the new tracks (so a big import is handled in small batches). It never runs at the same time as another Hall Pass job.</div>
+                        </div>
+                        <div class="checkboxContainer">
+                            <label><input is="emby-checkbox" type="checkbox" id="hpApplyAfter" /><span>Write the tags after a scheduled or automatic scan</span></label>
+                            <div class="fieldDescription">Off by default: then tags change only when you press "Apply decisions". When on, and dry run is off below, the nightly scan and the scan of new tracks also write their tags, and every change is journalled so you can undo it from History.</div>
+                        </div>
+                    </div>
+
+                    <div class="paper-card" style="padding: 1.5em; margin-top: 1.5em;">
                         <h3 style="margin-top: 0;">What Hall Pass looks at</h3>
                         <div class="checkboxContainer">
                             <label><input is="emby-checkbox" type="checkbox" id="hpReadTags" /><span>Read each file's own tags</span></label>

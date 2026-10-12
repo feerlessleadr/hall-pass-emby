@@ -116,6 +116,7 @@ public class HallPassApiService : IService
 		{
 			Job = ScanJob.Status,
 			Write = WriteJob.Status,
+			Auto = AutoScan.Status,
 			Stats = new
 			{
 				stats.Total,

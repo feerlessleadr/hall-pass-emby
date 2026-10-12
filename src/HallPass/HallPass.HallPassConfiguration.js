@@ -131,7 +131,10 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
             const bar = view.querySelector('#hpProgress');
             bar.max = Math.max(1, job.Total || 1);
             bar.value = scanning || job.State === 'Completed' ? (job.Processed || 0) : 0;
-            view.querySelector('#hpLastScan').textContent = s.Stats && s.Stats.LastScanUtc ? 'Last track scanned: ' + when(s.Stats.LastScanUtc) : '';
+            const auto = s.Auto || {};
+            view.querySelector('#hpLastScan').textContent = (s.Stats && s.Stats.LastScanUtc ? 'Last track scanned: ' + when(s.Stats.LastScanUtc) + '.' : '')
+                + (auto.Waiting ? ' ' + auto.Waiting + ' new track(s) waiting to be looked at.' : '')
+                + (auto.Processed ? ' ' + auto.Processed + ' new track(s) looked at automatically' + (auto.LastUtc ? ' (last: ' + when(auto.LastUtc) + ')' : '') + '.' : '');
 
             const write = s.Write || {};
             const writing = write.State === 'Running';
@@ -230,7 +233,7 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
                 jobs.forEach((job) => {
                     const row = el('tr');
                     row.appendChild(el('td', null, when(job.StartedUtc)));
-                    row.appendChild(el('td', null, job.Kind === 'undo' ? 'Undo' : 'Apply decisions'));
+                    row.appendChild(el('td', null, job.Kind === 'undo' ? 'Undo' : (job.Kind === 'auto' ? 'Automatic (new tracks)' : 'Apply decisions')));
                     const result = el('td');
                     result.appendChild(el('div', null, job.Unfinished ? 'Did not finish (Emby stopped, or it is still running)'
                         : job.Changed + ' changed, ' + job.Unchanged + ' already right' + (job.Failed ? ', ' + job.Failed + ' failed' : '') + (job.Conflicts ? ', ' + job.Conflicts + ' left alone (edited since)' : '')));
@@ -398,6 +401,8 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
                 view.querySelector('#hpSkippedClean').checked = !!c.TagSkippedAsClean;
                 view.querySelector('#hpBatch').value = c.BatchSize;
                 view.querySelector('#hpReadTags').checked = !!c.ReadFileTags;
+                view.querySelector('#hpAutoScan').checked = !!c.AutoScanNewTracks;
+                view.querySelector('#hpApplyAfter').checked = !!c.ApplyAfterScan;
                 view.querySelector('#hpOnline').checked = !!c.OnlineEnabled;
                 view.querySelector('#hpDeezer').checked = !!c.OnlineDeezer;
                 view.querySelector('#hpITunes').checked = !!c.OnlineITunes;
@@ -431,6 +436,13 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
             c.TagSkippedAsClean = view.querySelector('#hpSkippedClean').checked;
             c.BatchSize = parseInt(view.querySelector('#hpBatch').value, 10);
             c.ReadFileTags = view.querySelector('#hpReadTags').checked;
+            c.AutoScanNewTracks = view.querySelector('#hpAutoScan').checked;
+            const applyAfter = view.querySelector('#hpApplyAfter').checked;
+            if (!c.ApplyAfterScan && applyAfter && !dryRun && !window.confirm('Write tags automatically after the nightly scan and the scan of new tracks? Every change is journalled and can be undone from History.')) {
+                view.querySelector('#hpApplyAfter').checked = false;
+                return;
+            }
+            c.ApplyAfterScan = applyAfter;
             const wasOnline = !!c.OnlineEnabled;
             c.OnlineEnabled = view.querySelector('#hpOnline').checked;
             c.OnlineDeezer = view.querySelector('#hpDeezer').checked;

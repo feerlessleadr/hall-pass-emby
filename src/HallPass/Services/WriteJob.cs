@@ -68,7 +68,17 @@ internal static class WriteJob
 		{
 			throw new InvalidOperationException("Dry run is on, so no tag is written. Switch it off in Settings first.");
 		}
-		return Start("apply", null, false);
+		return Start("apply", null, false, null);
+	}
+
+	/// <summary>Writes the tags of just these tracks (after the automatic scan of new tracks): the same rules as an apply, journalled as "auto".</summary>
+	public static WriteStatus StartAuto(IReadOnlyCollection<long> onlyIds)
+	{
+		if (HallPassState.Config.DryRun)
+		{
+			throw new InvalidOperationException("Dry run is on, so no tag is written.");
+		}
+		return Start("auto", null, false, onlyIds);
 	}
 
 	public static WriteStatus StartUndo(string jobId, bool force)
@@ -78,10 +88,10 @@ internal static class WriteJob
 		{
 			throw new InvalidOperationException("That job is not in the journal (it may have been tidied away).");
 		}
-		return Start("undo", jobId, force);
+		return Start("undo", jobId, force, null);
 	}
 
-	private static WriteStatus Start(string kind, string? undoOf, bool force)
+	private static WriteStatus Start(string kind, string? undoOf, bool force, IReadOnlyCollection<long>? onlyIds)
 	{
 		lock (Gate)
 		{
@@ -93,7 +103,7 @@ internal static class WriteJob
 			string jobId = JournalStore.NewJobId();
 			_status = new WriteStatus { State = "Running", Kind = kind, JobId = jobId, StartedUtc = DateTime.UtcNow, Message = "Starting" };
 			CancellationToken token = _cts.Token;
-			Task.Run(() => RunAsync(kind, jobId, undoOf, force, token));
+			Task.Run(() => RunAsync(kind, jobId, undoOf, force, onlyIds, token));
 			return _status;
 		}
 	}
@@ -114,7 +124,7 @@ internal static class WriteJob
 		}
 	}
 
-	private static async Task RunAsync(string kind, string jobId, string? undoOf, bool force, CancellationToken token)
+	private static async Task RunAsync(string kind, string jobId, string? undoOf, bool force, IReadOnlyCollection<long>? onlyIds, CancellationToken token)
 	{
 		int total = 0, processed = 0, changed = 0, unchanged = 0, failed = 0, conflicts = 0;
 		bool cancelled = false;
@@ -126,10 +136,10 @@ internal static class WriteJob
 			int batchSize = Math.Clamp(config.BatchSize, 1, 2000);
 			journal = JournalStore.Begin(jobId, kind, undoOf);
 
-			IEnumerable<Func<(BaseItem Item, JournalEntry? Entry, bool Skip, bool Missing, bool Conflict)>> work = kind == "apply"
-				? PlanApply(config, out total)
+			IEnumerable<Func<(BaseItem Item, JournalEntry? Entry, bool Skip, bool Missing, bool Conflict)>> work = kind != "undo"
+				? PlanApply(config, onlyIds, out total)
 				: PlanUndo(undoOf!, force, out total);
-			Update((WriteStatus s) => Copy(s, total: total, message: (kind == "apply" ? "Writing tags to " : "Putting back ") + total + " tracks"));
+			Update((WriteStatus s) => Copy(s, total: total, message: (kind != "undo" ? "Writing tags to " : "Putting back ") + total + " tracks"));
 
 			foreach (Func<(BaseItem Item, JournalEntry? Entry, bool Skip, bool Missing, bool Conflict)> step in work)
 			{
@@ -203,7 +213,7 @@ internal static class WriteJob
 		}
 		JobGate.Exit();
 		int pf = processed, cf2 = changed, uf = unchanged, ff = failed, cc = conflicts;
-		string verb = kind == "apply" ? "written" : "put back";
+		string verb = kind != "undo" ? "written" : "put back";
 		Update((WriteStatus s) => Copy(s, state: cancelled ? "Cancelled" : "Completed", processed: pf, changed: cf2, unchanged: uf, failed: ff, conflicts: cc, finished: true,
 			message: (cancelled ? "Cancelled: " : "Done: ") + cf2 + " " + verb + ", " + uf + " already right" + (ff > 0 ? ", " + ff + " failed" : string.Empty) + (cc > 0 ? ", " + cc + " left alone (edited since)" : string.Empty)));
 	}
@@ -248,10 +258,10 @@ internal static class WriteJob
 
 	// ----- planning: one step per track, run lazily so the first batch starts at once ------------------------------
 
-	private static IEnumerable<Func<(BaseItem Item, JournalEntry? Entry, bool Skip, bool Missing, bool Conflict)>> PlanApply(PluginConfiguration config, out int total)
+	private static IEnumerable<Func<(BaseItem Item, JournalEntry? Entry, bool Skip, bool Missing, bool Conflict)>> PlanApply(PluginConfiguration config, IReadOnlyCollection<long>? onlyIds, out int total)
 	{
 		TagNames names = NamesFor(config);
-		List<TrackRecord> records = HallPassState.Store.All().Where((TrackRecord r) => r.Decision != Decision.Unscanned).ToList();
+		List<TrackRecord> records = HallPassState.Store.All().Where((TrackRecord r) => r.Decision != Decision.Unscanned && (onlyIds == null || onlyIds.Contains(r.ItemId))).ToList();
 		total = records.Count;
 		bool skippedAsClean = config.TagSkippedAsClean;
 		return records.Select((TrackRecord record) => (Func<(BaseItem, JournalEntry?, bool, bool, bool)>)(() =>
