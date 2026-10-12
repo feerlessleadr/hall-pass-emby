@@ -31,7 +31,7 @@ Findings from decompiling Emby Server 4.10.1.0 (`MediaBrowser.Controller`, `Medi
 ## Still open
 
 - NFO behaviour with a saver enabled (item 8); cascade (9); `ItemAdded` and the scheduled task (11 and above); `IHttpClient` and proxies; ffprobe route for file tags; the evidence store; how fast `UpdateItems` is in batches (measure before choosing a batch size); whether SmartLists' own Tags rule (item or parent scope) sees tags written this way (Emby's own queries do).
-- The two probe endpoints (`/HallPass/Probe/...`) are Phase 0 tools and must be removed before a release.
+- The two temporary probe endpoints used during Phase 0 were removed before the first release.
 
 ## More findings from milestone 3 (tag writing, 2026-10-12)
 

@@ -1,0 +1,15 @@
+# Weekly checks for newer versions of what the build depends on. Dependabot opens a pull request; nothing changes by itself.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "nuget"
+    directory: "/src/HallPass"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "nuget"
+    directory: "/tests/HallPass.Tests"
+    schedule:
+      interval: "weekly"

@@ -8,6 +8,12 @@ using MediaBrowser.Model.Services;
 namespace HallPass.Services;
 
 [Authenticated(Roles = "Admin")]
+[Route("/HallPass/Info", "GET", Summary = "Plugin name, version and API version.")]
+public class InfoRequest : IReturn<object>
+{
+}
+
+[Authenticated(Roles = "Admin")]
 [Route("/HallPass/Status", "GET", Summary = "The scan job, the counts and the active settings.")]
 public class StatusRequest : IReturn<object>
 {
@@ -108,6 +114,16 @@ public class UndoRequest : IReturn<object>
 
 public class HallPassApiService : IService
 {
+	public object Get(InfoRequest request)
+	{
+		return new
+		{
+			Name = Plugin.Instance.Name,
+			Version = typeof(Plugin).Assembly.GetName().Version?.ToString(),
+			ApiVersion = 1
+		};
+	}
+
 	public object Get(StatusRequest request)
 	{
 		PluginConfiguration c = HallPassState.Config;

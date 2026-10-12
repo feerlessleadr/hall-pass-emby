@@ -23,3 +23,8 @@ Emby Server plugin that scans music tracks, decides whether each one is explicit
 ## Conventions
 - Commits are authored as `feerlessleadr <github@thecgkg.com>` (never the work email), with `git -c user.name=feerlessleadr -c user.email=github@thecgkg.com commit -F <file>` and the trailer `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>`. Push to main is allowed; tags and releases only when the owner says "publish it".
 - Never print, store or commit keys, tokens, passwords or keystores. Ask before behaviour changes; say what was NOT verified.
+
+## Where things are (updated at the first release)
+- Built through milestone 5: engine, scan, review queue and web page, tag writing with journal and undo, file tags and online lookups, nightly task and automatic scan of new tracks. `PROGRESS.md` has the log, decisions with their reasons and what was not verified. The temporary probe endpoints are gone.
+- Release: `docs/releases/v<version>.md` is the release text; the tag `v<AssemblyVersion>` triggers `.github/workflows/release.yml` (tests, build, SHA-256, provenance, GitHub release). Only when the owner says "publish it". The version also names the page cache in Emby, so bump it whenever the page changes.
+- Owner steps GitHub cannot do from here: switch on CodeQL (Settings > Code security > default setup) and immutable releases, add a repository description and topics.
