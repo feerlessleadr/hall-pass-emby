@@ -1,0 +1,23 @@
+<div is="emby-scroller" class="view flex flex-direction-column scrollFrameY flex-grow" data-horizontal="false" data-forcescrollbar="true" data-centerfocus="true" data-bindheader="true" data-controller="__plugin/HallPassConfigurationjs" data-title="Hall Pass">
+    <div class="scrollSlider flex-direction-column padded-left padded-left-page padded-right padded-top-page padded-bottom-page">
+        <div class="readOnlyContent auto-center" style="max-width: 900px;">
+            <h1 class="pageTitle">Hall Pass</h1>
+            <p>Finds explicit music and tags it, so a smart playlist can leave it out. This is an early build: only the plumbing is here.</p>
+
+            <div class="paper-card" style="padding: 1.5em; margin-top: 1.5em;">
+                <h3 style="margin-top: 0;">Status</h3>
+                <div id="hpInfo" class="fieldDescription">Loading...</div>
+            </div>
+
+            <div class="paper-card" style="padding: 1.5em; margin-top: 1.5em;">
+                <h3 style="margin-top: 0;">Probe an item</h3>
+                <div class="fieldDescription" style="margin-bottom: 1em;">Shows the tags, locked fields and lyric streams (counts only, never the text) of one item. Use Emby's internal item id (the number in the item's web address).</div>
+                <div class="inputContainer">
+                    <input is="emby-input" id="hpItemId" type="text" label="Item id" />
+                </div>
+                <button is="emby-button" type="button" id="hpProbe" class="raised button-submit block"><span>Probe</span></button>
+                <pre id="hpResult" style="white-space: pre-wrap; word-break: break-all; margin-top: 1em;"></pre>
+            </div>
+        </div>
+    </div>
+</div>

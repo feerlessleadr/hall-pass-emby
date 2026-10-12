@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net6.0": {
+      "MediaBrowser.Server.Core": {
+        "type": "Direct",
+        "requested": "[4.9.1.90, )",
+        "resolved": "4.9.1.90",
+        "contentHash": "lyThQ7kXhzLNisMfqzSoxrhG/7gnK9/lJyNfV/TCo10c30oKiTR2n5nG+ognv6hCNz9jmcPpAt3561Oj7EIVwQ==",
+        "dependencies": {
+          "MediaBrowser.Common": "4.9.1.90"
+        }
+      },
+      "MediaBrowser.Common": {
+        "type": "Transitive",
+        "resolved": "4.9.1.90",
+        "contentHash": "QzXFYh7TPskAtctdCguJxep9aMSfIrsT4F+xUrdAVh4pj2KAD3DzwkY1DDPIUUD6M+Lgwag/NesBgd1pgLffbQ=="
+      }
+    }
+  }
+}

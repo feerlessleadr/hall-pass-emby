@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>HallPass</AssemblyName>
+    <RootNamespace>HallPass</RootNamespace>
+    <GenerateAssemblyInfo>False</GenerateAssemblyInfo>
+    <TargetFramework>net6.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>annotations</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AllowUnsafeBlocks>False</AllowUnsafeBlocks>
+    <CheckForOverflowUnderflow>True</CheckForOverflowUnderflow>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Remove="HallPass.HallPassConfiguration.html" />
+    <None Remove="HallPass.HallPassConfiguration.js" />
+    <EmbeddedResource Include="HallPass.HallPassConfiguration.html" LogicalName="HallPass.HallPassConfiguration.html" />
+    <EmbeddedResource Include="HallPass.HallPassConfiguration.js" LogicalName="HallPass.HallPassConfiguration.js" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="MediaBrowser.Server.Core" Version="4.9.1.90" />
+  </ItemGroup>
+</Project>
