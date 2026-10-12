@@ -63,3 +63,6 @@
 - **Core:** `ReviewQuery.Artist/Album`, `EvidenceStore.MatchingIds` (cap, truncation flag) and `Albums` (groups by artist and album with matching and total counts); `AlbumSelectionTests`.
 - **API:** `GET /HallPass/Review/Albums`; `Review` takes `Artist`, `Album`, `NoAlbum`; `Items/Decide` takes `AllMatching` with `Match...` filters (up to 20,000 tracks, returns `Changed`, `Matched`, `Truncated`).
 - **Page:** Review tab gets "Show: Albums", per-album Open / Mark all explicit / Mark all clean, and "Select all N matching" with confirmations.
+
+## 2026-10-12: 1.0.1.0 tagged; 1.0.2.0 fix prepared
+- `v1.0.1.0` tagged on `3ecc01d` (CI and CodeQL green). The owner then found that saving the settings failed on 1.0.0.0 and later: the "Tracks saved at a time" input had `min="1" step="10"`, so 200 was invalid and the browser blocked the form. Fixed with `step="1"` (1.0.2.0). Lesson: the page was only tested by setting values with script, never by pressing Save with the browser's own validation; check every number input's min/step against its default.
