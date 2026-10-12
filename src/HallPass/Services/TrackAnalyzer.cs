@@ -95,6 +95,15 @@ internal static class TrackAnalyzer
 			double? seconds = item.RunTimeTicks is > 0 ? item.RunTimeTicks.Value / 10_000_000.0 : null;
 			TrackInfo local = new TrackInfo(item.Name ?? string.Empty, primaryArtist, audio?.Album, seconds, ids.Isrc);
 			record.Evidence.AddRange(await OnlineStage.LookupAsync(local, ids, config, token).ConfigureAwait(false));
+			// the track has no lyrics of its own: try the lyrics catalog (opt-in)
+			if (best == null && config.OnlineLyrics)
+			{
+				EvidenceItem? lyrics = await LyricsStage.LookupAsync(local, scanner, config, token).ConfigureAwait(false);
+				if (lyrics != null)
+				{
+					record.Evidence.Add(lyrics);
+				}
+			}
 		}
 		return record;
 	}

@@ -59,4 +59,27 @@ public static class TagPlan
 		}
 		return new TagChange(before, after.ToArray(), true);
 	}
+
+	/// <summary>
+	/// The tags of an album or artist: the explicit tag when any of its tracks is explicit, no managed tag otherwise (the other managed tags belong to single tracks).
+	/// Unchanged when it already carries exactly that.
+	/// </summary>
+	public static TagChange ForRollUp(IReadOnlyList<string> current, TagNames names, bool anyExplicit)
+	{
+		string[] before = current.ToArray();
+		List<string> managedNow = before.Where(names.IsManaged).ToList();
+		bool alreadyRight = anyExplicit
+			? managedNow.Count == 1 && string.Equals(managedNow[0], names.Explicit, StringComparison.OrdinalIgnoreCase)
+			: managedNow.Count == 0;
+		if (alreadyRight)
+		{
+			return new TagChange(before, before, false);
+		}
+		List<string> after = before.Where((string t) => !names.IsManaged(t)).ToList();
+		if (anyExplicit)
+		{
+			after.Add(names.Explicit);
+		}
+		return new TagChange(before, after.ToArray(), true);
+	}
 }

@@ -66,3 +66,11 @@
 
 ## 2026-10-12: 1.0.1.0 tagged; 1.0.2.0 fix prepared
 - `v1.0.1.0` tagged on `3ecc01d` (CI and CodeQL green). The owner then found that saving the settings failed on 1.0.0.0 and later: the "Tracks saved at a time" input had `min="1" step="10"`, so 200 was invalid and the browser blocked the form. Fixed with `step="1"` (1.0.2.0). Lesson: the page was only tested by setting values with script, never by pressing Save with the browser's own validation; check every number input's min/step against its default.
+
+## 2026-10-12: 1.1.0.0 work (word list, lyrics fallback, Try it, rescan one, roll-up)
+- **Word list editing:** `WordList.WithEdits` (tier moves, ignored words that also drop stems, extra allowed words), five lists in the settings, `GET /HallPass/WordList`, `POST /HallPass/WordList/Test`; the evidence version includes the edits so a rescan follows.
+- **Lyrics fallback:** `OnlineLyrics` (parse, strip timestamps, cap 0.7, length check) and `LyricsStage` (LRCLIB `/api/get`, 3 a second, retries); only when the track has no lyrics of its own and online lookups and the new switch are both on.
+- **Try it / Rescan:** `POST /HallPass/Lookup`, `POST /HallPass/Items/Rescan`, a Try it tab and a button per review row.
+- **Roll-up:** `TagPlan.ForRollUp`, `RollUp.Plan` (album = `Audio.AlbumId`, artists = `Audio.ArtistItems`), added to the apply plan and the preview; settings `RollUpAlbums` / `RollUpArtists`.
+- **Checked live (test server):** word list test with edits; real LRCLIB/Deezer lookups via Try it; one-track rescans; roll-up apply wrote 7 albums and 3 artists plus the tracks (71 items), a manual clean on a single-album artist removed its tags on the next apply, undo of both jobs put every tag back (0 Hall Pass tags left on albums, artists and tracks); settings restored (dry run on, online off).
+- **Not verified:** the lyrics fallback inside a full scan on a real no-lyrics track (the test library's tracks without lyrics are fake artists LRCLIB does not know; the stage itself was exercised through Try it); the new settings page sections on phone widths; clicking Apply with roll-up from the page (the API was used).

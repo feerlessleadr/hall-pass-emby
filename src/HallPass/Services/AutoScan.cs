@@ -130,7 +130,7 @@ internal static class AutoScan
 	private static async Task<List<long>> ScanBatchAsync(IReadOnlyList<long> ids, PluginConfiguration config, CancellationToken token)
 	{
 		DecisionSettings settings = HallPassState.DecisionSettingsFor(config);
-		ProfanityScanner scanner = new ProfanityScanner(WordList.Default(), HallPassState.ScannerOptionsFor(config));
+		ProfanityScanner scanner = new ProfanityScanner(HallPassState.WordListFor(config), HallPassState.ScannerOptionsFor(config));
 		string version = HallPassState.EvidenceVersionFor(config);
 		EvidenceStore store = HallPassState.Store;
 		List<long> looked = new List<long>();

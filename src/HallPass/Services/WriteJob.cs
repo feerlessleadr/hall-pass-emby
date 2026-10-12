@@ -262,8 +262,20 @@ internal static class WriteJob
 	{
 		TagNames names = NamesFor(config);
 		List<TrackRecord> records = HallPassState.Store.All().Where((TrackRecord r) => r.Decision != Decision.Unscanned && (onlyIds == null || onlyIds.Contains(r.ItemId))).ToList();
-		total = records.Count;
+		List<ContainerPlan> containers = RollUp.Plan(config, records, onlyIds == null);
+		total = records.Count + containers.Count;
 		bool skippedAsClean = config.TagSkippedAsClean;
+		IEnumerable<Func<(BaseItem, JournalEntry?, bool, bool, bool)>> containerSteps = containers.Select((ContainerPlan plan) => (Func<(BaseItem, JournalEntry?, bool, bool, bool)>)(() =>
+		{
+			BaseItem item = plan.Item;
+			bool lockAdded = !item.LockedFields.Contains(MetadataFields.Tags);
+			item.SetTags(plan.Change.After);
+			if (lockAdded)
+			{
+				item.LockedFields = item.LockedFields.Concat(new[] { MetadataFields.Tags }).ToArray();
+			}
+			return (item, new JournalEntry { ItemId = item.InternalId, Name = (plan.Kind == "album" ? "Album: " : "Artist: ") + item.Name, Before = plan.Change.Before, After = plan.Change.After, LockAdded = lockAdded }, false, false, false);
+		})).ToList();
 		return records.Select((TrackRecord record) => (Func<(BaseItem, JournalEntry?, bool, bool, bool)>)(() =>
 		{
 			BaseItem? item = Plugin.Instance!.LibraryManager.GetItemById(record.ItemId);
@@ -283,7 +295,7 @@ internal static class WriteJob
 				item.LockedFields = item.LockedFields.Concat(new[] { MetadataFields.Tags }).ToArray();
 			}
 			return (item, new JournalEntry { ItemId = record.ItemId, Name = record.Name, Before = plan.Before, After = plan.After, LockAdded = lockAdded }, false, false, false);
-		})).ToList();
+		})).Concat(containerSteps).ToList();
 	}
 
 	private static IEnumerable<Func<(BaseItem Item, JournalEntry? Entry, bool Skip, bool Missing, bool Conflict)>> PlanUndo(string undoOf, bool force, out int total)

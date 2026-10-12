@@ -400,6 +400,9 @@ public class HallPassApiService : IService
 
 		public int WouldChange { get; set; }
 
+		/// <summary>How many of the changes are albums or artists (the optional roll-up).</summary>
+		public int RollUps { get; set; }
+
 		public int Unchanged { get; set; }
 
 		public int Missing { get; set; }
@@ -416,7 +419,19 @@ public class HallPassApiService : IService
 		PluginConfiguration c = HallPassState.Config;
 		TagNames names = WriteJob.NamesFor(c);
 		PreviewResult result = new PreviewResult { DryRun = c.DryRun };
-		foreach (TrackRecord record in HallPassState.Store.All().Where((TrackRecord r) => r.Decision != Decision.Unscanned))
+		List<TrackRecord> decided = HallPassState.Store.All().Where((TrackRecord r) => r.Decision != Decision.Unscanned).ToList();
+		foreach (ContainerPlan plan in RollUp.Plan(c, decided, true))
+		{
+			result.WouldChange++;
+			result.RollUps++;
+			string label = plan.Change.After.Length > plan.Change.Before.Length || !plan.Change.Before.Any((string t) => names.IsManaged(t)) ? names.Explicit + " (" + plan.Kind + "s)" : "(no tag) (" + plan.Kind + "s)";
+			result.ByTag[label] = result.ByTag.TryGetValue(label, out int k) ? k + 1 : 1;
+			if (result.Sample.Count < sampleSize)
+			{
+				result.Sample.Add(new { Id = plan.Item.InternalId, Name = plan.Item.Name, Artist = plan.Kind, Decision = plan.Kind, plan.Change.Before, plan.Change.After });
+			}
+		}
+		foreach (TrackRecord record in decided)
 		{
 			result.Total++;
 			MediaBrowser.Controller.Entities.BaseItem item = Plugin.Instance.LibraryManager.GetItemById(record.ItemId);
@@ -459,7 +474,7 @@ public class HallPassApiService : IService
 		return found.Count == 0 ? null : found.ToArray();
 	}
 
-	private static object Row(TrackRecord r)
+	internal static object Row(TrackRecord r)
 	{
 		return new
 		{

@@ -132,7 +132,7 @@ internal static class ScanJob
 			OnlineStage.ResetCounters();
 			PluginConfiguration config = HallPassState.Config;
 			DecisionSettings settings = HallPassState.DecisionSettingsFor(config);
-			ProfanityScanner scanner = new ProfanityScanner(WordList.Default(), HallPassState.ScannerOptionsFor(config));
+			ProfanityScanner scanner = new ProfanityScanner(HallPassState.WordListFor(config), HallPassState.ScannerOptionsFor(config));
 			string version = HallPassState.EvidenceVersionFor(config);
 			EvidenceStore store = HallPassState.Store;
 

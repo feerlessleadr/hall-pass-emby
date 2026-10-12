@@ -20,6 +20,17 @@ public class PluginConfiguration : BasePluginConfiguration
 	/// <summary>Tracks in these genres are left alone (instrumental music has no lyrics to judge).</summary>
 	public string[] SkipGenres { get; set; } = new string[] { "Classical", "Instrumental", "Soundtrack", "Score" };
 
+	/// <summary>Changes to the built-in word list (one word per entry): words put in a tier, words that never count, and extra words that are always fine.</summary>
+	public string[] ExtraSevereWords { get; set; } = new string[0];
+
+	public string[] ExtraModerateWords { get; set; } = new string[0];
+
+	public string[] ExtraMildWords { get; set; } = new string[0];
+
+	public string[] IgnoredWords { get; set; } = new string[0];
+
+	public string[] ExtraAllowedWords { get; set; } = new string[0];
+
 	/// <summary>The four tags Hall Pass manages. A track gets exactly one of them (when writing is switched on).</summary>
 	public string ExplicitTag { get; set; } = "explicit";
 
@@ -58,6 +69,14 @@ public class PluginConfiguration : BasePluginConfiguration
 	public bool OnlineDeezer { get; set; } = true;
 
 	public bool OnlineITunes { get; set; } = true;
+
+	/// <summary>For tracks with no lyrics of their own, ask LRCLIB for the lyrics (needs <see cref="OnlineEnabled"/>). Sends artist, title, album and length; the text is scanned in memory and never stored.</summary>
+	public bool OnlineLyrics { get; set; }
+
+	/// <summary>Also tag an album (and/or an artist) with the explicit tag when any of its tracks is explicit, and take it off when none is. Written when you press Apply, journalled and undoable like track tags.</summary>
+	public bool RollUpAlbums { get; set; }
+
+	public bool RollUpArtists { get; set; }
 
 	/// <summary>How long an online answer is kept, in days (and a "nothing found" answer).</summary>
 	public int OnlineCacheDays { get; set; } = 90;

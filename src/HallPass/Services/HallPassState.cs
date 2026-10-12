@@ -88,6 +88,18 @@ internal static class HallPassState
 		};
 	}
 
+	/// <summary>The built-in word list with the owner's changes from the settings.</summary>
+	public static WordList WordListFor(PluginConfiguration c)
+	{
+		return WordList.Default().WithEdits(c.ExtraSevereWords, c.ExtraModerateWords, c.ExtraMildWords, c.ExtraAllowedWords, c.IgnoredWords);
+	}
+
+	private static string WordEditsKey(PluginConfiguration c)
+	{
+		static string Sorted(string[]? list) => string.Join(",", WordList.Clean(list).OrderBy((string s) => s, StringComparer.Ordinal));
+		return string.Join("|", Sorted(c.ExtraSevereWords), Sorted(c.ExtraModerateWords), Sorted(c.ExtraMildWords), Sorted(c.ExtraAllowedWords), Sorted(c.IgnoredWords));
+	}
+
 	public static ScannerOptions ScannerOptionsFor(PluginConfiguration c)
 	{
 		return new ScannerOptions { MinWordsForClean = c.MinWordsForClean, PerTermCap = c.PerTermCap };
@@ -99,6 +111,7 @@ internal static class HallPassState
 		ScannerOptions o = ScannerOptionsFor(c);
 		return EvidenceStore.Fingerprint(
 			WordList.DefaultJson(),
+			WordEditsKey(c),
 			o.ExplicitScore.ToString(),
 			o.SuspectScore.ToString(),
 			o.ExplicitConfidence.ToString("0.00"),
@@ -112,7 +125,8 @@ internal static class HallPassState
 			c.ReadFileTags.ToString(),
 			c.OnlineEnabled.ToString(),
 			c.OnlineEnabled && c.OnlineDeezer ? "deezer" : string.Empty,
-			c.OnlineEnabled && c.OnlineITunes ? "itunes" : string.Empty);
+			c.OnlineEnabled && c.OnlineITunes ? "itunes" : string.Empty,
+			c.OnlineEnabled && c.OnlineLyrics ? "lrclib" : string.Empty);
 	}
 
 	private static OnlineCache? _online;

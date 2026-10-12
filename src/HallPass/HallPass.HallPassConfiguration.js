@@ -3,7 +3,7 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
 
     const pluginId = '6ca80343-2b60-40de-ab81-7a41628fcaf2';
     const PAGE_SIZE = 50;
-    const PAGES = '#hpDashPage, #hpReviewPage, #hpHistoryPage, #hpSettingsPage';
+    const PAGES = '#hpDashPage, #hpReviewPage, #hpHistoryPage, #hpTryPage, #hpSettingsPage';
     const DECISIONS = [
         ['Explicit', 'Explicit', 'hp-explicit'],
         ['Review', 'Needs review', 'hp-review'],
@@ -93,6 +93,8 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
             });
             view.querySelector('#hpMarkExplicit').addEventListener('click', () => this.decide('explicit'));
             view.querySelector('#hpMarkClean').addEventListener('click', () => this.decide('clean'));
+            view.querySelector('#hpWTryBtn').addEventListener('click', () => this.tryWords());
+            view.querySelector('#hpTryTrack').addEventListener('click', () => this.tryTrack());
             view.querySelector('#hpClearManual').addEventListener('click', () => this.decide('clearOverride'));
 
             view.querySelector('.hpSettingsForm').addEventListener('submit', (e) => {
@@ -186,7 +188,7 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
                 this.lastPreview = p;
                 const byTag = Object.keys(p.ByTag || {}).map(k => p.ByTag[k] + ' to ' + k);
                 view.querySelector('#hpPreviewText').textContent = p.WouldChange
-                    ? p.WouldChange + ' of ' + p.Total + ' tracks would change: ' + byTag.join(', ') + '. ' + p.Unchanged + ' already have the right tag' + (p.Missing ? ', ' + p.Missing + ' are no longer in the library' : '') + '.'
+                    ? p.WouldChange + ' items would change (' + p.Total + ' tracks looked at)' + (p.RollUps ? ' (' + p.RollUps + ' of them albums or artists)' : '') + ': ' + byTag.join(', ') + '. ' + p.Unchanged + ' already have the right tag' + (p.Missing ? ', ' + p.Missing + ' are no longer in the library' : '') + '.'
                     : 'Nothing would change: all ' + p.Unchanged + ' decided tracks already have the right tag' + (p.Missing ? ' (' + p.Missing + ' are no longer in the library)' : '') + '.';
                 const box = view.querySelector('#hpPreviewSample');
                 box.textContent = '';
@@ -208,7 +210,7 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
                     toast({ type: 'info', text: 'Nothing to change.' });
                     return;
                 }
-                if (!window.confirm('Write tags to ' + p.WouldChange + ' tracks in your library? Every change is journalled and can be undone from the History tab.')) {
+                if (!window.confirm('Write tags to ' + p.WouldChange + ' items (tracks, and albums or artists if the roll-up is on) in your library? Every change is journalled and can be undone from the History tab.')) {
                     return;
                 }
                 const large = p.WouldChange > 5000;
@@ -442,6 +444,11 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
                     } else {
                         why.appendChild(el('div', null, item.Skipped ? 'In a skipped genre.' : 'No evidence.'));
                     }
+                    const again = el('button', 'raised emby-button', 'Rescan this track');
+                    again.setAttribute('is', 'emby-button');
+                    again.type = 'button';
+                    again.addEventListener('click', () => this.rescanOne(item.Id));
+                    why.appendChild(again);
                     row.appendChild(why);
                     table.appendChild(row);
                 });
@@ -515,6 +522,13 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
                 view.querySelector('#hpMinWords').value = c.MinWordsForClean;
                 view.querySelector('#hpCap').value = c.PerTermCap;
                 view.querySelector('#hpSkipGenres').value = (c.SkipGenres || []).join('\n');
+                const lines = (arr) => (arr || []).join('\n');
+                view.querySelector('#hpWSevere').value = lines(c.ExtraSevereWords);
+                view.querySelector('#hpWModerate').value = lines(c.ExtraModerateWords);
+                view.querySelector('#hpWMild').value = lines(c.ExtraMildWords);
+                view.querySelector('#hpWIgnore').value = lines(c.IgnoredWords);
+                view.querySelector('#hpWAllow').value = lines(c.ExtraAllowedWords);
+                this.loadBuiltinWords();
                 view.querySelector('#hpTagExplicit').value = c.ExplicitTag;
                 view.querySelector('#hpTagClean').value = c.CleanTag;
                 view.querySelector('#hpTagLikely').value = c.LikelyCleanTag;
@@ -529,12 +543,86 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
                 view.querySelector('#hpOnline').checked = !!c.OnlineEnabled;
                 view.querySelector('#hpDeezer').checked = !!c.OnlineDeezer;
                 view.querySelector('#hpITunes').checked = !!c.OnlineITunes;
+                view.querySelector('#hpLrclib').checked = !!c.OnlineLyrics;
+                view.querySelector('#hpRollAlbums').checked = !!c.RollUpAlbums;
+                view.querySelector('#hpRollArtists').checked = !!c.RollUpArtists;
                 view.querySelector('#hpCacheDays').value = c.OnlineCacheDays;
                 view.querySelector('#hpNegDays').value = c.OnlineNegativeDays;
             }).catch(() => {
                 loading.hide();
                 toast({ type: 'error', text: 'Could not load the settings.' });
             });
+        }
+
+        tryTrack() {
+            const view = this.view;
+            const val = (id) => view.querySelector(id).value.trim();
+            const out = view.querySelector('#hpTryOut');
+            if (!val('#hpTTitle') && !val('#hpTIsrc') && !val('#hpTUpc')) {
+                out.textContent = 'Give at least a title, an ISRC or an album barcode.';
+                return;
+            }
+            out.textContent = 'Asking the online sources (this can take a few seconds)...';
+            postJson('HallPass/Lookup', {
+                Artist: val('#hpTArtist'),
+                Title: val('#hpTTitle'),
+                Album: val('#hpTAlbum'),
+                Seconds: parseFloat(val('#hpTSeconds')) || 0,
+                Isrc: val('#hpTIsrc'),
+                Upc: val('#hpTUpc')
+            }).then((r) => {
+                out.textContent = '';
+                out.appendChild(el('div', null, 'Would be: ' + (LABELS[r.Decision] || r.Decision) + (r.Confidence ? ' (' + r.Confidence.toFixed(2) + ')' : '') + '. ' + (r.Reason || '')));
+                (r.Evidence || []).forEach((e) => out.appendChild(el('div', 'fieldDescription', e.Source + ': ' + e.Verdict + ' ' + e.Confidence.toFixed(2) + (e.Detail ? ' (' + e.Detail + ')' : ''))));
+                if (r.Note) {
+                    out.appendChild(el('div', 'fieldDescription', r.Note));
+                }
+            }).catch(() => { out.textContent = 'The lookup failed. Check your internet connection and try again.'; });
+        }
+
+        rescanOne(id) {
+            loading.show();
+            postJson('HallPass/Items/Rescan', { ItemId: id }).then(() => {
+                loading.hide();
+                toast({ type: 'info', text: 'Looked at the track again.' });
+                this.loadReview();
+                this.refreshStatus();
+            }).catch(() => {
+                loading.hide();
+                toast({ type: 'error', text: 'Could not rescan (is a scan or apply running?).' });
+            });
+        }
+
+        loadBuiltinWords() {
+            const box = this.view.querySelector('#hpWBuiltin');
+            getJson('HallPass/WordList').then((w) => {
+                box.textContent = '';
+                [['Severe', w.Severe], ['Moderate', w.Moderate], ['Mild (counts nothing)', w.Mild], ['Also caught inside longer words', w.Stems], ['Always fine', w.Allow]].forEach((t) => {
+                    box.appendChild(el('div', null, t[0] + ': ' + t[1].join(', ')));
+                });
+            }).catch(() => { box.textContent = 'Could not load the built-in list.'; });
+        }
+
+        tryWords() {
+            const view = this.view;
+            const text = view.querySelector('#hpWTryText').value;
+            const out = view.querySelector('#hpWTryResult');
+            if (!text.trim()) {
+                out.textContent = 'Paste some text first.';
+                return;
+            }
+            const words = (id) => view.querySelector(id).value.split('\n').map(s => s.trim()).filter(Boolean);
+            postJson('HallPass/WordList/Test', {
+                Text: text,
+                ExtraSevereWords: words('#hpWSevere'),
+                ExtraModerateWords: words('#hpWModerate'),
+                ExtraMildWords: words('#hpWMild'),
+                IgnoredWords: words('#hpWIgnore'),
+                ExtraAllowedWords: words('#hpWAllow')
+            }).then((r) => {
+                const hits = r.Hits.map(h => h.Term + (h.Count > 1 ? ' x' + h.Count : '') + ' (' + h.Weight + ')').join(', ');
+                out.textContent = 'Score ' + r.Score + ' over ' + r.WordCount + ' words. ' + (LABELS[r.Verdict] || r.Verdict) + ' at ' + r.Confidence.toFixed(2) + (hits ? '. Found: ' + hits : '. No listed words.');
+            }).catch(() => { out.textContent = 'Could not score the text.'; });
         }
 
         saveSettings() {
@@ -550,6 +638,12 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
             c.MinWordsForClean = parseInt(view.querySelector('#hpMinWords').value, 10);
             c.PerTermCap = parseInt(view.querySelector('#hpCap').value, 10);
             c.SkipGenres = view.querySelector('#hpSkipGenres').value.split('\n').map(s => s.trim()).filter(Boolean);
+            const words = (id) => view.querySelector(id).value.split('\n').map(s => s.trim()).filter(Boolean);
+            c.ExtraSevereWords = words('#hpWSevere');
+            c.ExtraModerateWords = words('#hpWModerate');
+            c.ExtraMildWords = words('#hpWMild');
+            c.IgnoredWords = words('#hpWIgnore');
+            c.ExtraAllowedWords = words('#hpWAllow');
             c.ExplicitTag = view.querySelector('#hpTagExplicit').value;
             c.CleanTag = view.querySelector('#hpTagClean').value;
             c.LikelyCleanTag = view.querySelector('#hpTagLikely').value;
@@ -570,6 +664,9 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
             c.OnlineEnabled = view.querySelector('#hpOnline').checked;
             c.OnlineDeezer = view.querySelector('#hpDeezer').checked;
             c.OnlineITunes = view.querySelector('#hpITunes').checked;
+            c.OnlineLyrics = view.querySelector('#hpLrclib').checked;
+            c.RollUpAlbums = view.querySelector('#hpRollAlbums').checked;
+            c.RollUpArtists = view.querySelector('#hpRollArtists').checked;
             c.OnlineCacheDays = parseInt(view.querySelector('#hpCacheDays').value, 10);
             c.OnlineNegativeDays = parseInt(view.querySelector('#hpNegDays').value, 10);
             if (!wasOnline && c.OnlineEnabled && !window.confirm('Turn on online lookups? Hall Pass will ask Deezer and iTunes about your tracks, sending only the artist, title, ISRC or album barcode (never file names, paths or lyrics). You can turn this off again at any time.')) {

@@ -90,4 +90,38 @@ public sealed class WordList
 	}
 
 	public static WordList Default() => Parse(DefaultJson());
+
+	/// <summary>
+	/// This list changed by the owner: words put in a tier (a word moved to another tier takes the new one), words ignored (never score, even inside a stem match),
+	/// and extra allowed words. An ignored word wins over everything else. Entries are trimmed and lower-cased; blanks and over-long entries are dropped.
+	/// </summary>
+	public WordList WithEdits(IEnumerable<string>? severe, IEnumerable<string>? moderate, IEnumerable<string>? mild, IEnumerable<string>? allow, IEnumerable<string>? ignore)
+	{
+		Dictionary<string, int> words = new Dictionary<string, int>(Words, StringComparer.Ordinal);
+		void Put(IEnumerable<string>? list, int weight)
+		{
+			foreach (string w in Clean(list))
+			{
+				words[w] = weight;
+			}
+		}
+		Put(mild, MildWeight);
+		Put(moderate, ModerateWeight);
+		Put(severe, SevereWeight);
+		HashSet<string> ignored = new HashSet<string>(Clean(ignore), StringComparer.Ordinal);
+		foreach (string w in ignored)
+		{
+			words.Remove(w);
+		}
+		Dictionary<string, int> stems = Stems.Where((KeyValuePair<string, int> p) => !ignored.Contains(p.Key)).ToDictionary((KeyValuePair<string, int> p) => p.Key, (KeyValuePair<string, int> p) => p.Value, StringComparer.Ordinal);
+		HashSet<string> allowed = new HashSet<string>(Allow, StringComparer.Ordinal);
+		allowed.UnionWith(Clean(allow));
+		allowed.UnionWith(ignored);
+		return new WordList(words, stems, allowed);
+	}
+
+	public static IReadOnlyList<string> Clean(IEnumerable<string>? list)
+	{
+		return (list ?? Array.Empty<string>()).Select((string s) => (s ?? string.Empty).Trim().ToLowerInvariant()).Where((string s) => s.Length > 0 && s.Length <= 40).Distinct(StringComparer.Ordinal).ToList();
+	}
 }
