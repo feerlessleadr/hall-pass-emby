@@ -1,0 +1,37 @@
+{
+  "severe": [
+    "fuck", "fucker", "fuckers", "motherfucker", "motherfuckers", "motherfucking",
+    "cunt", "cunts",
+    "nigger", "niggers", "nigga", "niggas",
+    "faggot", "faggots",
+    "cocksucker", "cocksuckers"
+  ],
+  "moderate": [
+    "shit", "bullshit", "horseshit",
+    "bitch", "bitches", "bitchin",
+    "asshole", "assholes",
+    "dick", "dicks", "dickhead",
+    "cock", "cocks",
+    "pussy", "pussies",
+    "whore", "whores", "slut", "sluts",
+    "bastard", "bastards",
+    "prick", "twat", "wanker",
+    "tits", "titty", "titties",
+    "douche", "douchebag",
+    "jackass", "dumbass", "smartass", "badass",
+    "goddamn", "goddamnit", "goddamned", "dammit", "damnit",
+    "blowjob", "porn"
+  ],
+  "mild": [
+    "damn", "hell", "ass", "asses", "crap", "piss", "arse"
+  ],
+  "stems": {
+    "fuck": 3,
+    "shit": 2
+  },
+  "allow": [
+    "scunthorpe", "shiitake", "shitake", "shittim", "mishit",
+    "cockburn", "dickens", "dickinson", "hancock", "peacock",
+    "hello", "shell", "bassist", "assist", "assistant", "assume", "class", "pass", "mass", "grass", "glass", "brass"
+  ]
+}

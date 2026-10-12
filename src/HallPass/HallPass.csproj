@@ -14,6 +14,8 @@
   <ItemGroup>
     <None Remove="HallPass.HallPassConfiguration.html" />
     <None Remove="HallPass.HallPassConfiguration.js" />
+    <None Remove="Resources/default-wordlist.json" />
+    <EmbeddedResource Include="Resources/default-wordlist.json" LogicalName="HallPass.default-wordlist.json" />
     <EmbeddedResource Include="HallPass.HallPassConfiguration.html" LogicalName="HallPass.HallPassConfiguration.html" />
     <EmbeddedResource Include="HallPass.HallPassConfiguration.js" LogicalName="HallPass.HallPassConfiguration.js" />
   </ItemGroup>
