@@ -57,9 +57,12 @@ public class DecisionEngineTests
 	public void OnlyStrongCleanEvidenceIsClean()
 	{
 		Assert.Equal(Decision.Clean, Decide(C("embedded", 0.9)).Decision);
-		DecisionResult weak = Decide(C("lyrics", 0.5));
-		Assert.Equal(Decision.Review, weak.Decision);
-		Assert.Equal(ReviewReason.WeakClean, weak.ReviewReason);
+		DecisionResult likely = Decide(C("lyrics", 0.5));
+		Assert.Equal(Decision.LikelyClean, likely.Decision);
+		Assert.Equal(ReviewReason.None, likely.ReviewReason);
+		DecisionResult faint = Decide(C("title", 0.4));
+		Assert.Equal(Decision.Review, faint.Decision);
+		Assert.Equal(ReviewReason.WeakClean, faint.ReviewReason);
 	}
 
 	[Fact]
@@ -77,11 +80,11 @@ public class DecisionEngineTests
 	public void TheConservativePresetNeedsTwoSourcesForCleanAndTrustsLessExplicitEvidence()
 	{
 		DecisionSettings s = DecisionSettings.Conservative;
-		Assert.Equal(ReviewReason.WeakClean, DecisionEngine.Decide(ManualOverride.None, new[] { C("embedded", 0.9) }, s).ReviewReason);
+		Assert.Equal(Decision.LikelyClean, DecisionEngine.Decide(ManualOverride.None, new[] { C("embedded", 0.9) }, s).Decision);
 		Assert.Equal(Decision.Clean, DecisionEngine.Decide(ManualOverride.None, new[] { C("embedded", 0.9), C("online", 0.95) }, s).Decision);
 		Assert.Equal(Decision.Explicit, DecisionEngine.Decide(ManualOverride.None, new[] { E("title", 0.6) }, s).Decision);
 		// two clean items from one source are still one source
-		Assert.Equal(ReviewReason.WeakClean, DecisionEngine.Decide(ManualOverride.None, new[] { C("online", 0.9), C("online", 0.95) }, s).ReviewReason);
+		Assert.Equal(Decision.LikelyClean, DecisionEngine.Decide(ManualOverride.None, new[] { C("online", 0.9), C("online", 0.95) }, s).Decision);
 	}
 
 	[Fact]
@@ -91,6 +94,16 @@ public class DecisionEngineTests
 		Assert.Equal(Decision.Clean, DecisionEngine.Decide(ManualOverride.None, new[] { C("online", 0.8) }, s).Decision);
 		Assert.Equal(Decision.Review, DecisionEngine.Decide(ManualOverride.None, new[] { E("lyrics", 0.8) }, s).Decision);
 		Assert.Equal(Decision.Explicit, DecisionEngine.Decide(ManualOverride.None, new[] { E("online", 0.9) }, s).Decision);
+	}
+
+	[Fact]
+	public void TheLikelyCleanBarCanBeMoved()
+	{
+		DecisionSettings strict = new DecisionSettings { LikelyClean = 0.7 };
+		Assert.Equal(ReviewReason.WeakClean, DecisionEngine.Decide(ManualOverride.None, new[] { C("lyrics", 0.5) }, strict).ReviewReason);
+		Assert.Equal(Decision.LikelyClean, DecisionEngine.Decide(ManualOverride.None, new[] { C("title", 0.7) }, strict).Decision);
+		// explicit evidence of any size keeps a track out of likely clean
+		Assert.Equal(Decision.Review, Decide(C("lyrics", 0.5), E("title", 0.6)).Decision);
 	}
 
 	[Fact]

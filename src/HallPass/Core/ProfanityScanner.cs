@@ -123,7 +123,8 @@ public sealed class ProfanityScanner
 		}
 		if (result.WordCount >= _options.MinWordsForClean)
 		{
-			return new EvidenceItem(source, Verdict.Clean, _options.CleanConfidence, "no hits in " + result.WordCount + " words");
+			string mild = result.Hits.Count == 0 ? string.Empty : " (mild words, not scored: " + terms + ")";
+			return new EvidenceItem(source, Verdict.Clean, _options.CleanConfidence, "no scoring hits in " + result.WordCount + " words" + mild);
 		}
 		return new EvidenceItem(source, Verdict.None, 0, "too little text to say");
 	}

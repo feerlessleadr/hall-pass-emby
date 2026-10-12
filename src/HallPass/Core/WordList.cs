@@ -18,7 +18,8 @@ public sealed class WordList
 
 	public const int ModerateWeight = 2;
 
-	public const int MildWeight = 1;
+	/// <summary>Mild words are recorded but score nothing (the owner does not mind "damn").</summary>
+	public const int MildWeight = 0;
 
 	/// <summary>Whole words and their weight.</summary>
 	public IReadOnlyDictionary<string, int> Words { get; }
@@ -64,7 +65,7 @@ public sealed class WordList
 		{
 			foreach (JsonProperty p in stemObj.EnumerateObject())
 			{
-				stems[p.Name.Trim().ToLowerInvariant()] = Math.Clamp(p.Value.GetInt32(), MildWeight, SevereWeight);
+				stems[p.Name.Trim().ToLowerInvariant()] = Math.Clamp(p.Value.GetInt32(), 1, SevereWeight);
 			}
 		}
 		List<string> allow = new List<string>();

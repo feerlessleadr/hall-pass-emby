@@ -194,7 +194,7 @@ public class WordListTests
 		WordList list = WordList.Parse("{\"severe\":[\"aaa\"],\"moderate\":[\"bbb\",\"aaa\"],\"mild\":[\"ccc\",\"BBB\"],\"stems\":{\"zzz\":9,\"yyy\":0},\"allow\":[\"OK\"]}");
 		Assert.Equal(3, list.Words["aaa"]);
 		Assert.Equal(2, list.Words["bbb"]);
-		Assert.Equal(1, list.Words["ccc"]);
+		Assert.Equal(0, list.Words["ccc"]); // mild words score nothing
 		Assert.Equal(3, list.Stems["zzz"]); // clamped
 		Assert.Equal(1, list.Stems["yyy"]);
 		Assert.Contains("ok", list.Allow);
@@ -205,8 +205,14 @@ public class WordListTests
 	{
 		WordList list = WordList.Default();
 		Assert.Equal(3, list.Words["fuck"]);
-		Assert.Equal(2, list.Words["shit"]);
-		Assert.Equal(1, list.Words["damn"]);
+		Assert.Equal(3, list.Words["shit"]);
+		Assert.Equal(3, list.Words["bitch"]);
+		Assert.Equal(2, list.Words["piss"]);
+		Assert.Equal(2, list.Words["ass"]);
+		Assert.Equal(0, list.Words["pissed"]);
+		Assert.Equal(0, list.Words["damn"]);
+		Assert.Equal(0, list.Words["hell"]);
+		Assert.Equal(3, list.Stems["shit"]);
 		Assert.Contains("fuck", list.Stems.Keys);
 		Assert.Contains("scunthorpe", list.Allow);
 		// every allowlisted word must be harmless: nothing on the list may also be a list word

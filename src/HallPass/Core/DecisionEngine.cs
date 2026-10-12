@@ -19,6 +19,9 @@ public sealed class DecisionSettings
 	/// <summary>How many different sources must say "clean" before a track is called clean.</summary>
 	public int MinCleanSources { get; init; } = 1;
 
+	/// <summary>Clean evidence from here up (and no explicit evidence) makes a track "likely clean": probably fine, not confirmed. Below it the track goes to review.</summary>
+	public double LikelyClean { get; init; } = 0.5;
+
 	public static DecisionSettings Balanced => new DecisionSettings();
 
 	/// <summary>Lower bar for explicit, and clean needs two independent sources.</summary>
@@ -69,9 +72,13 @@ public static class DecisionEngine
 		{
 			return new DecisionResult(Decision.Clean, bestClean, ReviewReason.None, "clean evidence " + bestClean.ToString("0.00"));
 		}
+		if (bestExplicit == 0 && bestClean >= settings.LikelyClean)
+		{
+			return new DecisionResult(Decision.LikelyClean, bestClean, ReviewReason.None, "clean-looking, not confirmed (" + bestClean.ToString("0.00") + ")");
+		}
 		if (bestExplicit == 0)
 		{
-			return new DecisionResult(Decision.Review, bestClean, ReviewReason.WeakClean, "only weak signs of a clean track");
+			return new DecisionResult(Decision.Review, bestClean, ReviewReason.WeakClean, "only a faint sign of a clean track");
 		}
 		return new DecisionResult(Decision.Review, bestExplicit, conflict ? ReviewReason.Conflict : ReviewReason.Suspected, conflict ? "explicit and clean evidence disagree" : "some sign of explicit content, not enough to be sure");
 	}

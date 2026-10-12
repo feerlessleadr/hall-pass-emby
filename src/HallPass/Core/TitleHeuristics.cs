@@ -17,7 +17,7 @@ public static class TitleHeuristics
 	public const double CleanMarker = 0.6;
 
 	/// <summary>A radio edit is often, not always, the clean version.</summary>
-	public const double RadioEditMarker = 0.5;
+	public const double RadioEditMarker = 0.4;
 
 	private static readonly Regex NotExplicit = new Regex(@"\b(?:not|non)[\s\-]?explicit\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 

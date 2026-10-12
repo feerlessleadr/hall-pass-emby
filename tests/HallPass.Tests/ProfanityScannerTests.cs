@@ -51,10 +51,19 @@ public class ProfanityScannerTests
 	[InlineData("FUCKING", 3)]
 	[InlineData("motherfuckin'", 3)]
 	[InlineData("motherfuckin’", 3)]
-	[InlineData("shit", 2)]
-	[InlineData("bullshitter", 2)]
-	[InlineData("damn", 1)]
-	[InlineData("hell", 1)]
+	[InlineData("shit", 3)]
+	[InlineData("bullshitter", 3)]
+	[InlineData("bitch", 3)]
+	[InlineData("pussy", 3)]
+	[InlineData("piss", 2)]
+	[InlineData("pissing", 2)]
+	[InlineData("ass", 2)]
+	[InlineData("asshole", 2)]
+	[InlineData("pissed", 0)]
+	[InlineData("damn", 0)]
+	[InlineData("hell", 0)]
+	[InlineData("crap", 0)]
+	[InlineData("arse", 0)]
 	public void TiersCarryTheirWeights(string word, int weight)
 	{
 		Assert.Equal(weight, Score("oh " + word + " oh"));
@@ -91,11 +100,11 @@ public class ProfanityScannerTests
 	[Fact]
 	public void TimingMarksAndMetadataLinesAreStripped()
 	{
-		string lrc = "[ar:Some Artist]\n[ti:Some Song]\n[offset:0]\n[00:12.34]Hello there my friend\n[00:20.00]oh <00:21.10>damn <00:21.80>it\n";
+		string lrc = "[ar:Some Artist]\n[ti:Some Song]\n[offset:0]\n[00:12.34]Hello there my friend\n[00:20.00]oh <00:21.10>piss <00:21.80>it\n";
 		ScanResult r = Scanner().Scan(lrc);
-		Assert.Equal(1, r.Score);
-		Assert.Equal("damn", Assert.Single(r.Hits).Term);
-		Assert.Equal(7, r.WordCount); // hello there my friend oh damn it
+		Assert.Equal(2, r.Score);
+		Assert.Equal("piss", Assert.Single(r.Hits).Term);
+		Assert.Equal(7, r.WordCount); // hello there my friend oh piss it
 		Assert.DoesNotContain("00", ProfanityScanner.StripTimings(lrc));
 		Assert.DoesNotContain("Some Artist", ProfanityScanner.StripTimings(lrc));
 	}
@@ -103,16 +112,16 @@ public class ProfanityScannerTests
 	[Fact]
 	public void RepeatedWordsCountEachTimeUnlessCapped()
 	{
-		Assert.Equal(3, Score("hell hell hell"));
+		Assert.Equal(6, Score("piss piss piss"));
 		ScannerOptions cap = new ScannerOptions { PerTermCap = 1 };
-		Assert.Equal(1, Scanner(cap).Scan("hell hell hell").Score);
+		Assert.Equal(2, Scanner(cap).Scan("piss piss piss").Score);
 	}
 
 	[Fact]
 	public void HitsAreSortedByTheirShareOfTheScoreAndCounted()
 	{
 		ScanResult r = Scanner().Scan("damn fuck shit shit");
-		Assert.Equal(1 + 3 + 4, r.Score);
+		Assert.Equal(0 + 3 + 6, r.Score);
 		Assert.Equal(new[] { "shit", "fuck", "damn" }, r.Hits.Select((WordHit h) => h.Term).ToArray());
 		Assert.Equal(2, r.Hits.Single((WordHit h) => h.Term == "shit").Count);
 	}
@@ -120,7 +129,7 @@ public class ProfanityScannerTests
 	[Fact]
 	public void TheAllowlistWinsOverEverything()
 	{
-		WordList list = WordList.Parse("{\"mild\":[\"hell\"],\"stems\":{\"hel\":2},\"allow\":[\"hello\",\"hell's\"]}");
+		WordList list = WordList.Parse("{\"moderate\":[\"hell\"],\"stems\":{\"hel\":2},\"allow\":[\"hello\",\"hell's\"]}");
 		ProfanityScanner scanner = new ProfanityScanner(list);
 		Assert.Equal(0, scanner.Scan("hello").Score);
 		Assert.True(scanner.Scan("hell").Score > 0);
@@ -137,13 +146,18 @@ public class ProfanityScannerTests
 		Assert.Equal(0.75, explicitEvidence.Confidence);
 		Assert.Equal("lyrics", explicitEvidence.Source);
 
-		EvidenceItem suspect = scanner.ToEvidence(scanner.Scan("oh damn"));
+		EvidenceItem suspect = scanner.ToEvidence(scanner.Scan("oh piss"));
 		Assert.Equal(Verdict.Explicit, suspect.Verdict);
 		Assert.Equal(0.5, suspect.Confidence);
 
 		EvidenceItem clean = scanner.ToEvidence(scanner.Scan(CleanVerse));
 		Assert.Equal(Verdict.Clean, clean.Verdict);
 		Assert.Equal(0.5, clean.Confidence);
+
+		// mild words are recorded in the detail but never score: still clean-looking
+		EvidenceItem mildOnly = scanner.ToEvidence(scanner.Scan(CleanVerse + " damn damn"));
+		Assert.Equal(Verdict.Clean, mildOnly.Verdict);
+		Assert.Contains("damn x2", mildOnly.Detail);
 
 		// too little text to call anything clean (an instrumental's placeholder)
 		Assert.Equal(Verdict.None, scanner.ToEvidence(scanner.Scan("[Instrumental]")).Verdict);
@@ -154,7 +168,7 @@ public class ProfanityScannerTests
 	public void EvidenceNeverCarriesTheLyrics()
 	{
 		ProfanityScanner scanner = Scanner();
-		EvidenceItem e = scanner.ToEvidence(scanner.Scan("sunshine and rainbows all day long, then a damn good night's sleep for everybody"));
+		EvidenceItem e = scanner.ToEvidence(scanner.Scan("sunshine and rainbows all day long, then a damn good night's sleep for everybody who walks down this road with a song"));
 		Assert.DoesNotContain("sunshine", e.Detail);
 		Assert.DoesNotContain("rainbows", e.Detail);
 		Assert.Contains("damn", e.Detail);
@@ -165,7 +179,7 @@ public class ProfanityScannerTests
 	{
 		ScannerOptions strict = new ScannerOptions { ExplicitScore = 1, ExplicitConfidence = 0.9 };
 		ProfanityScanner scanner = Scanner(strict);
-		EvidenceItem e = scanner.ToEvidence(scanner.Scan("oh damn"));
+		EvidenceItem e = scanner.ToEvidence(scanner.Scan("oh piss"));
 		Assert.Equal(Verdict.Explicit, e.Verdict);
 		Assert.Equal(0.9, e.Confidence);
 	}

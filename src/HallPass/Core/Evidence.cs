@@ -15,6 +15,9 @@ public enum Decision
 	Skipped,
 	Explicit,
 	Clean,
+
+	/// <summary>Lyrics (or a marker) point to a clean track, but nothing confirms it. A playlist can choose to allow these.</summary>
+	LikelyClean,
 	Review,
 }
 
