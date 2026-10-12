@@ -43,6 +43,13 @@
         .hp-textfield { margin: 1em 0; }
         .hp-label { display: block; margin: 0 0 .4em 0; font-weight: 500; }
         .hp-textfield textarea { width: 100%; box-sizing: border-box; }
+        .localnav { display: flex; flex-wrap: wrap; gap: .5em; margin: 1em 0 1.4em 0; padding-bottom: 1em; border-bottom: 1px solid rgba(128,128,128,.3); }
+        .localnav .nav-button { margin: 0; padding: .6em 1.4em; border-radius: .5em; background: rgba(128,128,128,.18); font-weight: 500; }
+        .localnav .nav-button:hover { background: rgba(128,128,128,.32); }
+        .localnav .nav-button.ui-btn-active { background: #00a4dc; color: #fff; }
+        .hp-setnav { margin-top: 0; }
+        .hp-setbtn { background: transparent; border: 1px solid rgba(128,128,128,.5); }
+        .hp-setbtn-active, .hp-setbtn-active:hover { background: rgba(0,164,220,.25); border-color: #00a4dc; color: inherit; }
     </style>
     <div class="scrollSlider flex-direction-column padded-left padded-left-page padded-right padded-top-page padded-bottom-page">
         <div class="readOnlyContent auto-center" style="max-width: 1200px;">
