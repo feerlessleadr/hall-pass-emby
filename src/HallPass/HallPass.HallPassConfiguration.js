@@ -95,6 +95,18 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
             view.querySelector('#hpMarkClean').addEventListener('click', () => this.decide('clean'));
             view.querySelector('#hpWTryBtn').addEventListener('click', () => this.tryWords());
             view.querySelector('#hpTryTrack').addEventListener('click', () => this.tryTrack());
+            view.querySelectorAll('.hp-setbtn').forEach((b) => b.addEventListener('click', () => {
+                view.querySelectorAll('.hp-setbtn').forEach(x => x.classList.toggle('hp-setbtn-active', x === b));
+                view.querySelectorAll('.hp-setsec').forEach(s => s.classList.toggle('hide', s.id !== b.dataset.sec));
+            }));
+            // a field the browser refuses (like a batch size of 0) can sit in a hidden section: open that section so the message can show
+            view.querySelector('.hpSettingsForm').addEventListener('invalid', (e) => {
+                const sec = e.target.closest ? e.target.closest('.hp-setsec') : null;
+                if (sec && sec.classList.contains('hide')) {
+                    view.querySelectorAll('.hp-setsec').forEach(s => s.classList.toggle('hide', s !== sec));
+                    view.querySelectorAll('.hp-setbtn').forEach(x => x.classList.toggle('hp-setbtn-active', x.dataset.sec === sec.id));
+                }
+            }, true);
             view.querySelector('#hpClearManual').addEventListener('click', () => this.decide('clearOverride'));
 
             view.querySelector('.hpSettingsForm').addEventListener('submit', (e) => {

@@ -34,6 +34,15 @@
         .hp-manual { font-size: .8em; opacity: .8; display: block; margin-top: .3em; }
         .hp-pager { display: flex; gap: 1em; align-items: center; margin: 1em 0; }
         .hp-note { opacity: .8; margin: 1em 0; }
+        .hp-card { background: rgba(128,128,128,.12); border: 1px solid rgba(128,128,128,.28); border-radius: .6em; padding: 1.2em 1.5em; margin: 1.2em 0; }
+        .hp-card h3 { margin: 0 0 .8em 0; padding-bottom: .5em; border-bottom: 1px solid rgba(128,128,128,.28); }
+        .hp-setnav { display: flex; flex-wrap: wrap; gap: .5em; margin: 1em 0 .5em 0; }
+        .hp-setbtn { background: rgba(128,128,128,.18); color: inherit; border: 0; border-radius: 2em; padding: .55em 1.2em; font: inherit; cursor: pointer; }
+        .hp-setbtn:hover { background: rgba(128,128,128,.32); }
+        .hp-setbtn-active, .hp-setbtn-active:hover { background: #00a4dc; color: #fff; }
+        .hp-textfield { margin: 1em 0; }
+        .hp-label { display: block; margin: 0 0 .4em 0; font-weight: 500; }
+        .hp-textfield textarea { width: 100%; box-sizing: border-box; }
     </style>
     <div class="scrollSlider flex-direction-column padded-left padded-left-page padded-right padded-top-page padded-bottom-page">
         <div class="readOnlyContent auto-center" style="max-width: 1200px;">
@@ -53,7 +62,7 @@
                 <div class="hp-tiles" id="hpTiles"></div>
                 <div class="fieldDescription" id="hpReasons"></div>
 
-                <div class="paper-card" style="padding: 1.5em; margin-top: 1.5em;">
+                <div class="hp-card">
                     <h3 style="margin-top: 0;">Scan</h3>
                     <div id="hpJobText" class="fieldDescription">Loading...</div>
                     <progress id="hpProgress" class="hp-progress" value="0" max="1"></progress>
@@ -64,7 +73,7 @@
                     <div class="fieldDescription" style="margin-top: 1em;">"Scan now" looks only at new or changed tracks. "Rescan everything" looks at every track again. Lyrics are read from Emby (embedded or .lrc files) and are never stored, only the result.</div>
                 </div>
 
-                <div class="paper-card" style="padding: 1.5em; margin-top: 1.5em;">
+                <div class="hp-card">
                     <h3 style="margin-top: 0;">Tags</h3>
                     <div id="hpPreviewText" class="fieldDescription">Press "Preview changes" to see what Apply would do. Nothing is written by a preview.</div>
                     <div id="hpPreviewSample" class="hp-why" style="margin: .8em 0;"></div>
@@ -79,7 +88,7 @@
             </div>
 
             <div id="hpTryPage" class="hide">
-                <div class="paper-card" style="padding: 1.5em;">
+                <div class="hp-card">
                     <h3 style="margin-top: 0;">Try a track</h3>
                     <div class="fieldDescription" style="margin-bottom: 1em;">Describe a track and Hall Pass asks Deezer, iTunes and LRCLIB what they know, and shows what it would decide from that. This contacts those services when you press the button (even while online lookups are off in Settings) and sends only what you type here. Nothing is saved to your library.</div>
                     <div class="inputContainer"><input is="emby-input" type="text" id="hpTArtist" label="Artist:" /></div>
@@ -166,140 +175,176 @@
             </div>
 
             <div id="hpSettingsPage" class="hide">
+                <div class="hp-setnav" role="tablist">
+                    <button type="button" class="hp-setbtn hp-setbtn-active" data-sec="hpSecScoring">Scoring</button>
+                    <button type="button" class="hp-setbtn" data-sec="hpSecWords">Word list</button>
+                    <button type="button" class="hp-setbtn" data-sec="hpSecLookups">Lookups</button>
+                    <button type="button" class="hp-setbtn" data-sec="hpSecTags">Tags &amp; writing</button>
+                    <button type="button" class="hp-setbtn" data-sec="hpSecAuto">Keeping up to date</button>
+                </div>
                 <form class="hpSettingsForm">
-                    <div class="paper-card" style="padding: 1.5em; margin-top: 1em;">
-                        <h3 style="margin-top: 0;">How careful to be</h3>
-                        <div class="selectContainer">
-                            <select is="emby-select" id="hpPreset" label="Preset:">
-                                <option value="Balanced">Balanced</option>
-                                <option value="Conservative">Conservative (flags earlier; clean needs two sources)</option>
-                                <option value="Relaxed">Relaxed (flags later; clean needs less)</option>
-                            </select>
+                    <div id="hpSecScoring" class="hp-setsec">
+                        <div class="hp-card">
+                            <h3>How careful to be</h3>
+                            <div class="selectContainer">
+                                <select is="emby-select" id="hpPreset" label="Preset:">
+                                    <option value="Balanced">Balanced</option>
+                                    <option value="Conservative">Conservative (flags earlier; clean needs two sources)</option>
+                                    <option value="Relaxed">Relaxed (flags later; clean needs less)</option>
+                                </select>
+                            </div>
+                            <div class="inputContainer">
+                                <input is="emby-input" type="number" step="0.05" min="0.1" max="0.9" id="hpLikelyClean" label="Likely-clean confidence:" />
+                                <div class="fieldDescription">A track with clean-looking evidence at or above this (and nothing explicit) is "likely clean". Lyrics with no scoring words give 0.5.</div>
+                            </div>
+                            <div class="inputContainer">
+                                <input is="emby-input" type="number" step="1" min="0" max="500" id="hpMinWords" label="Fewest words of lyrics that can show a track is clean:" />
+                                <div class="fieldDescription">Shorter lyrics (an instrumental's placeholder) say nothing.</div>
+                            </div>
+                            <div class="inputContainer">
+                                <input is="emby-input" type="number" step="1" min="0" max="50" id="hpCap" label="Most times one word counts (0 = no limit):" />
+                                <div class="fieldDescription">Stops a chorus that repeats one word from adding up.</div>
+                            </div>
                         </div>
-                        <div class="inputContainer">
-                            <input is="emby-input" type="number" step="0.05" min="0.1" max="0.9" id="hpLikelyClean" label="Likely-clean confidence:" />
-                            <div class="fieldDescription">A track with clean-looking evidence at or above this (and nothing explicit) is "likely clean". Lyrics with no scoring words give 0.5.</div>
-                        </div>
-                        <div class="inputContainer">
-                            <input is="emby-input" type="number" step="1" min="0" max="500" id="hpMinWords" label="Fewest words of lyrics that can show a track is clean:" />
-                            <div class="fieldDescription">Shorter lyrics (an instrumental's placeholder) say nothing.</div>
-                        </div>
-                        <div class="inputContainer">
-                            <input is="emby-input" type="number" step="1" min="0" max="50" id="hpCap" label="Most times one word counts (0 = no limit):" />
-                            <div class="fieldDescription">Stops a chorus that repeats one word from adding up.</div>
-                        </div>
-                    </div>
-
-                    <div class="paper-card" style="padding: 1.5em; margin-top: 1.5em;">
-                        <h3 style="margin-top: 0;">Skipped genres</h3>
-                        <div class="inputContainer">
-                            <textarea is="emby-textarea" id="hpSkipGenres" rows="4" label="Genres to leave alone (one per line):" class="emby-textarea"></textarea>
-                            <div class="fieldDescription">Tracks in these genres are not judged (instrumental music has no lyrics). They show as "Skipped".</div>
-                        </div>
-                    </div>
-
-                    <div class="paper-card" style="padding: 1.5em; margin-top: 1.5em;">
-                        <h3 style="margin-top: 0;">Word list</h3>
-                        <div class="fieldDescription" style="margin-bottom: 1em;">Hall Pass comes with a list of words in three tiers: <b>severe</b> (counts 3), <b>moderate</b> (counts 2) and <b>mild</b> (recorded, counts nothing). Add or move words here, one per line. A word on a list below replaces its tier in the built-in list. Words under "Never count" are removed from the scan entirely. Inflections and masked spellings (like sh*t) are caught automatically.</div>
-                        <div class="inputContainer"><textarea is="emby-textarea" id="hpWSevere" rows="3" label="Severe words to add:" class="emby-textarea"></textarea></div>
-                        <div class="inputContainer"><textarea is="emby-textarea" id="hpWModerate" rows="3" label="Moderate words to add:" class="emby-textarea"></textarea></div>
-                        <div class="inputContainer"><textarea is="emby-textarea" id="hpWMild" rows="3" label="Mild words to add:" class="emby-textarea"></textarea></div>
-                        <div class="inputContainer"><textarea is="emby-textarea" id="hpWIgnore" rows="3" label="Never count these built-in words:" class="emby-textarea"></textarea></div>
-                        <div class="inputContainer"><textarea is="emby-textarea" id="hpWAllow" rows="3" label="Always fine (like a name that contains a bad word):" class="emby-textarea"></textarea></div>
-                        <div class="fieldDescription">After changing the words, save and press "Rescan everything" on the Dashboard so existing tracks are looked at again.</div>
-                        <details style="margin-top: 1em;">
-                            <summary>Show the built-in list</summary>
-                            <div id="hpWBuiltin" class="hp-why"></div>
-                        </details>
-                        <h4>Try some text</h4>
-                        <div class="inputContainer"><textarea is="emby-textarea" id="hpWTryText" rows="3" label="Paste a few lines to score with the lists above (not saved or stored):" class="emby-textarea"></textarea></div>
-                        <button is="emby-button" type="button" id="hpWTryBtn" class="raised"><span>Score it</span></button>
-                        <div id="hpWTryResult" class="hp-note"></div>
-                    </div>
-
-                    <div class="paper-card" style="padding: 1.5em; margin-top: 1.5em;">
-                        <h3 style="margin-top: 0;">Tags</h3>
-                        <div class="fieldDescription" style="margin-bottom: 1em;">Hall Pass gives each decided track exactly one of these tags when you press "Apply decisions" on the Dashboard (and only while dry run is off below). Playlists can then leave out "explicit" and "explicit-review", or allow only "clean", as you like.</div>
-                        <div class="inputContainer"><input is="emby-input" type="text" id="hpTagExplicit" label="Explicit:" /></div>
-                        <div class="inputContainer"><input is="emby-input" type="text" id="hpTagClean" label="Clean:" /></div>
-                        <div class="inputContainer"><input is="emby-input" type="text" id="hpTagLikely" label="Likely clean:" /></div>
-                        <div class="inputContainer"><input is="emby-input" type="text" id="hpTagReview" label="Needs review:" /></div>
-                    </div>
-
-                    <div class="paper-card" style="padding: 1.5em; margin-top: 1.5em;">
-                        <h3 style="margin-top: 0;">Keeping up to date</h3>
-                        <div class="fieldDescription" style="margin-bottom: 1em;">Hall Pass adds a scheduled task, <strong>Dashboard &gt; Scheduled Tasks &gt; Hall Pass &gt; Scan music for explicit content</strong>, that runs every night at 3:30 and looks only at new or changed tracks. Change or remove its schedule there like any other task.</div>
-                        <div class="checkboxContainer">
-                            <label><input is="emby-checkbox" type="checkbox" id="hpAutoScan" /><span>Look at new tracks by themselves</span></label>
-                            <div class="fieldDescription">When Emby adds music, Hall Pass waits until things have been quiet for half a minute and then looks at the new tracks (so a big import is handled in small batches). It never runs at the same time as another Hall Pass job.</div>
-                        </div>
-                        <div class="checkboxContainer">
-                            <label><input is="emby-checkbox" type="checkbox" id="hpApplyAfter" /><span>Write the tags after a scheduled or automatic scan</span></label>
-                            <div class="fieldDescription">Off by default: then tags change only when you press "Apply decisions". When on, and dry run is off below, the nightly scan and the scan of new tracks also write their tags, and every change is journalled so you can undo it from History.</div>
+                        <div class="hp-card">
+                            <h3>Skipped genres</h3>
+                            <div class="hp-textfield">
+                                <label class="hp-label" for="hpSkipGenres">Genres to leave alone (one per line)</label>
+                                <textarea is="emby-textarea" id="hpSkipGenres" rows="4" class="emby-textarea"></textarea>
+                                <div class="fieldDescription">Tracks in these genres are not judged (instrumental music has no lyrics). They show as "Skipped".</div>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="paper-card" style="padding: 1.5em; margin-top: 1.5em;">
-                        <h3 style="margin-top: 0;">What Hall Pass looks at</h3>
-                        <div class="checkboxContainer">
-                            <label><input is="emby-checkbox" type="checkbox" id="hpReadTags" /><span>Read each file's own tags</span></label>
-                            <div class="fieldDescription">Uses Emby's own ffprobe on this server. Finds an explicit/clean flag when a file has one, and the ISRC and album barcode that make online lookups precise. Nothing leaves the server.</div>
+                    <div id="hpSecWords" class="hp-setsec hide">
+                        <div class="hp-card">
+                            <h3>Your changes to the word list</h3>
+                            <div class="fieldDescription">Hall Pass comes with a list of words in three tiers: <b>severe</b> (counts 3), <b>moderate</b> (counts 2) and <b>mild</b> (recorded, counts nothing). Add or move words here, one per line. A word you list here takes the tier of the box it is in, replacing its tier in the built-in list. Inflections and masked spellings (like sh*t) are caught automatically.</div>
+                            <div class="hp-textfield"><label class="hp-label" for="hpWSevere">Severe words to add</label><textarea is="emby-textarea" id="hpWSevere" rows="3" class="emby-textarea"></textarea></div>
+                            <div class="hp-textfield"><label class="hp-label" for="hpWModerate">Moderate words to add</label><textarea is="emby-textarea" id="hpWModerate" rows="3" class="emby-textarea"></textarea></div>
+                            <div class="hp-textfield"><label class="hp-label" for="hpWMild">Mild words to add</label><textarea is="emby-textarea" id="hpWMild" rows="3" class="emby-textarea"></textarea></div>
+                            <div class="hp-textfield"><label class="hp-label" for="hpWIgnore">Never count these built-in words</label><textarea is="emby-textarea" id="hpWIgnore" rows="3" class="emby-textarea"></textarea><div class="fieldDescription">Removed from the scan entirely.</div></div>
+                            <div class="hp-textfield"><label class="hp-label" for="hpWAllow">Always fine (like a name that contains a bad word)</label><textarea is="emby-textarea" id="hpWAllow" rows="3" class="emby-textarea"></textarea></div>
+                            <div class="fieldDescription">After changing the words, save and press "Rescan everything" on the Dashboard so existing tracks are looked at again.</div>
                         </div>
-                        <div class="checkboxContainer">
-                            <label><input is="emby-checkbox" type="checkbox" id="hpOnline" /><span>Online lookups (asks Deezer and iTunes)</span></label>
-                            <div class="fieldDescription">Off by default. When on, Hall Pass asks <strong>Deezer</strong> (api.deezer.com) about a track by its ISRC, or by artist and title, and <strong>Apple iTunes</strong> (itunes.apple.com) about its album by barcode. It sends <strong>only</strong> the artist, title, ISRC or album barcode: never file names, paths, lyrics or anything about you or your server. Answers are kept on this server so nothing is asked twice, and a failure never makes a track look clean. Turn this off and nothing leaves your server.</div>
+                        <div class="hp-card">
+                            <h3>The built-in list</h3>
+                            <details>
+                                <summary>Show it</summary>
+                                <div id="hpWBuiltin" class="hp-why" style="margin-top: .8em;"></div>
+                            </details>
                         </div>
-                        <div class="checkboxContainer">
-                            <label><input is="emby-checkbox" type="checkbox" id="hpDeezer" /><span>Ask Deezer</span></label>
+                        <div class="hp-card">
+                            <h3>Try some text</h3>
+                            <div class="hp-textfield">
+                                <label class="hp-label" for="hpWTryText">Paste a few lines to score with the lists above (not saved or stored)</label>
+                                <textarea is="emby-textarea" id="hpWTryText" rows="3" class="emby-textarea"></textarea>
+                            </div>
+                            <button is="emby-button" type="button" id="hpWTryBtn" class="raised"><span>Score it</span></button>
+                            <div id="hpWTryResult" class="hp-note"></div>
                         </div>
-                        <div class="checkboxContainer">
-                            <label><input is="emby-checkbox" type="checkbox" id="hpITunes" /><span>Ask iTunes (needs an album barcode in the file)</span></label>
-                            <div class="fieldDescription">iTunes allows about 20 questions a minute, so a first scan with iTunes is slow for a big library (one question per album). Deezer allows far more.</div>
-                        </div>
-                        <div class="checkboxContainer">
-                            <label><input is="emby-checkbox" type="checkbox" id="hpLrclib" /><span>For tracks with no lyrics, ask LRCLIB for them</span></label>
-                            <div class="fieldDescription">Off by default. Asks lrclib.net for the lyrics of tracks that have none of their own, sending only artist, title, album and length. The text is scanned in memory and never kept; only the verdict is. Because it matches by name it counts for less than the file's own lyrics: on its own it can make a track likely clean or send it to review, never certain.</div>
-                        </div>
-                        <div class="inputContainer">
-                            <input is="emby-input" type="number" step="1" min="1" max="365" id="hpCacheDays" label="Keep an answer for (days):" />
-                        </div>
-                        <div class="inputContainer">
-                            <input is="emby-input" type="number" step="1" min="1" max="365" id="hpNegDays" label="Keep a 'nothing found' answer for (days):" />
-                        </div>
-                        <div class="fieldDescription">After changing these, press "Rescan everything" on the Dashboard so existing tracks are looked at again.</div>
                     </div>
 
-                    <div class="paper-card" style="padding: 1.5em; margin-top: 1.5em;">
-                        <h3 style="margin-top: 0;">Writing tags</h3>
-                        <div class="checkboxContainer">
-                            <label><input is="emby-checkbox" type="checkbox" id="hpDryRun" /><span>Dry run: do not write any tags</span></label>
-                            <div class="fieldDescription">While this is ticked, Hall Pass only scans and records decisions, and "Apply decisions" is refused. Untick it when you are happy with the preview.</div>
+                    <div id="hpSecLookups" class="hp-setsec hide">
+                        <div class="hp-card">
+                            <h3>Your files</h3>
+                            <div class="checkboxContainer">
+                                <label><input is="emby-checkbox" type="checkbox" id="hpReadTags" /><span>Read each file's own tags</span></label>
+                                <div class="fieldDescription">Uses Emby's own ffprobe on this server. Finds an explicit/clean flag when a file has one, and the ISRC and album barcode that make online lookups precise. Nothing leaves the server.</div>
+                            </div>
                         </div>
-                        <div class="checkboxContainer">
-                            <label><input is="emby-checkbox" type="checkbox" id="hpSavers" /><span>Let Emby's metadata savers run after a tag change</span></label>
-                            <div class="fieldDescription">Like an edit in the dashboard: if you keep NFO files next to your music they are updated too. Untick to change only Emby's database.</div>
+                        <div class="hp-card">
+                            <h3>Online lookups</h3>
+                            <div class="checkboxContainer">
+                                <label><input is="emby-checkbox" type="checkbox" id="hpOnline" /><span>Online lookups (asks Deezer and iTunes)</span></label>
+                                <div class="fieldDescription">Off by default. When on, Hall Pass asks <strong>Deezer</strong> (api.deezer.com) about a track by its ISRC, or by artist and title, and <strong>Apple iTunes</strong> (itunes.apple.com) about its album by barcode. It sends <strong>only</strong> the artist, title, ISRC or album barcode: never file names, paths, lyrics or anything about you or your server. Answers are kept on this server so nothing is asked twice, and a failure never makes a track look clean. Turn this off and nothing leaves your server.</div>
+                            </div>
+                            <div class="checkboxContainer">
+                                <label><input is="emby-checkbox" type="checkbox" id="hpDeezer" /><span>Ask Deezer</span></label>
+                            </div>
+                            <div class="checkboxContainer">
+                                <label><input is="emby-checkbox" type="checkbox" id="hpITunes" /><span>Ask iTunes (needs an album barcode in the file)</span></label>
+                                <div class="fieldDescription">iTunes allows about 20 questions a minute, so a first scan with iTunes is slow for a big library (one question per album). Deezer allows far more.</div>
+                            </div>
+                            <div class="inputContainer">
+                                <input is="emby-input" type="number" step="1" min="1" max="365" id="hpCacheDays" label="Keep an answer for (days):" />
+                            </div>
+                            <div class="inputContainer">
+                                <input is="emby-input" type="number" step="1" min="1" max="365" id="hpNegDays" label="Keep a 'nothing found' answer for (days):" />
+                            </div>
                         </div>
-                        <div class="checkboxContainer">
-                            <label><input is="emby-checkbox" type="checkbox" id="hpSkippedClean" /><span>Tag tracks in skipped genres as clean</span></label>
-                            <div class="fieldDescription">Off: they get no tag at all (and any Hall Pass tag they had is taken off).</div>
+                        <div class="hp-card">
+                            <h3>Lyrics for tracks that have none</h3>
+                            <div class="checkboxContainer">
+                                <label><input is="emby-checkbox" type="checkbox" id="hpLrclib" /><span>For tracks with no lyrics, ask LRCLIB for them</span></label>
+                                <div class="fieldDescription">Off by default, and only used while online lookups above are on. Asks lrclib.net for the lyrics of tracks that have none of their own, sending only artist, title, album and length. The text is scanned in memory and never kept; only the verdict is. Because it matches by name it counts for less than the file's own lyrics: on its own it can make a track likely clean or send it to review, never certain.</div>
+                            </div>
                         </div>
-                        <div class="checkboxContainer">
-                            <label><input is="emby-checkbox" type="checkbox" id="hpRollAlbums" /><span>Also tag albums explicit when any track is</span></label>
-                            <div class="fieldDescription">Off by default. An album with at least one explicit track gets the explicit tag when you press Apply, and loses it when none is explicit any more. Only the explicit tag is used for albums. Journalled and undoable like track tags.</div>
+                        <div class="fieldDescription">After changing anything here, press "Rescan everything" on the Dashboard so existing tracks are looked at again.</div>
+                    </div>
+
+                    <div id="hpSecTags" class="hp-setsec hide">
+                        <div class="hp-card">
+                            <h3>Tag names</h3>
+                            <div class="fieldDescription" style="margin-bottom: 1em;">Hall Pass gives each decided track exactly one of these tags when you press "Apply decisions" on the Dashboard (and only while dry run is off below). Playlists can then leave out "explicit" and "explicit-review", or allow only "clean", as you like.</div>
+                            <div class="inputContainer"><input is="emby-input" type="text" id="hpTagExplicit" label="Explicit:" /></div>
+                            <div class="inputContainer"><input is="emby-input" type="text" id="hpTagClean" label="Clean:" /></div>
+                            <div class="inputContainer"><input is="emby-input" type="text" id="hpTagLikely" label="Likely clean:" /></div>
+                            <div class="inputContainer"><input is="emby-input" type="text" id="hpTagReview" label="Needs review:" /></div>
                         </div>
-                        <div class="checkboxContainer">
-                            <label><input is="emby-checkbox" type="checkbox" id="hpRollArtists" /><span>Also tag artists explicit when any of their tracks is</span></label>
-                            <div class="fieldDescription">Off by default. The same for artists (every artist credited on an explicit track).</div>
+                        <div class="hp-card">
+                            <h3>Writing tags</h3>
+                            <div class="checkboxContainer">
+                                <label><input is="emby-checkbox" type="checkbox" id="hpDryRun" /><span>Dry run: do not write any tags</span></label>
+                                <div class="fieldDescription">While this is ticked, Hall Pass only scans and records decisions, and "Apply decisions" is refused. Untick it when you are happy with the preview.</div>
+                            </div>
+                            <div class="checkboxContainer">
+                                <label><input is="emby-checkbox" type="checkbox" id="hpSavers" /><span>Let Emby's metadata savers run after a tag change</span></label>
+                                <div class="fieldDescription">Like an edit in the dashboard: if you keep NFO files next to your music they are updated too. Untick to change only Emby's database.</div>
+                            </div>
+                            <div class="checkboxContainer">
+                                <label><input is="emby-checkbox" type="checkbox" id="hpSkippedClean" /><span>Tag tracks in skipped genres as clean</span></label>
+                                <div class="fieldDescription">Off: they get no tag at all (and any Hall Pass tag they had is taken off).</div>
+                            </div>
+                            <div class="inputContainer">
+                                <input is="emby-input" type="number" step="1" min="1" max="2000" id="hpBatch" label="Tracks saved at a time:" />
+                                <div class="fieldDescription">Smaller batches are gentler on a busy server.</div>
+                            </div>
                         </div>
-                        <div class="inputContainer">
-                            <input is="emby-input" type="number" step="1" min="1" max="2000" id="hpBatch" label="Tracks saved at a time:" />
-                            <div class="fieldDescription">Smaller batches are gentler on a busy server.</div>
+                        <div class="hp-card">
+                            <h3>Albums and artists</h3>
+                            <div class="checkboxContainer">
+                                <label><input is="emby-checkbox" type="checkbox" id="hpRollAlbums" /><span>Also tag albums explicit when any track is</span></label>
+                                <div class="fieldDescription">Off by default. An album with at least one explicit track gets the explicit tag when you press Apply, and loses it when none is explicit any more. Only the explicit tag is used for albums. Journalled and undoable like track tags.</div>
+                            </div>
+                            <div class="checkboxContainer">
+                                <label><input is="emby-checkbox" type="checkbox" id="hpRollArtists" /><span>Also tag artists explicit when any of their tracks is</span></label>
+                                <div class="fieldDescription">Off by default. The same for artists (every artist credited on an explicit track).</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="hpSecAuto" class="hp-setsec hide">
+                        <div class="hp-card">
+                            <h3>Scheduled scan</h3>
+                            <div class="fieldDescription">Hall Pass adds a scheduled task, <strong>Dashboard &gt; Scheduled Tasks &gt; Hall Pass &gt; Scan music for explicit content</strong>, that runs every night at 3:30 and looks only at new or changed tracks. Change or remove its schedule there like any other task.</div>
+                        </div>
+                        <div class="hp-card">
+                            <h3>New tracks</h3>
+                            <div class="checkboxContainer">
+                                <label><input is="emby-checkbox" type="checkbox" id="hpAutoScan" /><span>Look at new tracks by themselves</span></label>
+                                <div class="fieldDescription">When Emby adds music, Hall Pass waits until things have been quiet for half a minute and then looks at the new tracks (so a big import is handled in small batches). It never runs at the same time as another Hall Pass job.</div>
+                            </div>
+                            <div class="checkboxContainer">
+                                <label><input is="emby-checkbox" type="checkbox" id="hpApplyAfter" /><span>Write the tags after a scheduled or automatic scan</span></label>
+                                <div class="fieldDescription">Off by default: then tags change only when you press "Apply decisions". When on, and dry run is off (Tags &amp; writing), the nightly scan and the scan of new tracks also write their tags, and every change is journalled so you can undo it from History.</div>
+                            </div>
                         </div>
                     </div>
 
                     <div style="margin-top: 1.5em;">
-                        <button is="emby-button" type="submit" class="raised button-submit block"><span>Save</span></button>
-                        <div class="fieldDescription" style="margin-top: .5em;">Saving re-works every decision from the stored evidence at once. Changing the skipped genres or the lyrics options also needs a "Rescan everything" to take effect on tracks already scanned.</div>
+                        <button is="emby-button" type="submit" class="raised button-submit block"><span>Save all settings</span></button>
+                        <div class="fieldDescription" style="margin-top: .5em;">One Save covers every section. Saving re-works every decision from the stored evidence at once. Changing the skipped genres, the word list or the lookup options also needs a "Rescan everything" to take effect on tracks already scanned.</div>
                     </div>
                 </form>
             </div>
