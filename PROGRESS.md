@@ -58,3 +58,8 @@
 ## 2026-10-12: Hall Pass 1.0.0.0 released
 - Tag `v1.0.0.0` on `27704c1` (CI `test` and the three CodeQL jobs green); the `Release plugin` run succeeded. Release "Hall Pass plugin v1.0.0.0" (not a pre-release, immutable), assets `HallPass.dll` (230,912 bytes, SHA-256 `80aa4f156d4c73650dd1b2ef83683c82bd43ba4b56555f0432f3c491606e2ea2`, file version 1.0.0.0 inside the DLL) and `HallPass.dll.sha256`; the downloaded file's hash matches the release's digest and the release text is `docs/releases/v1.0.0.0.md`. `gh attestation verify` was not run (no `gh` on this machine).
 - Next: install through the GitHub Repo Plugin Install plugin on the owner's real server and run the first scan in dry run; ideas raised after release: select every track matching a search across pages (and by album or artist) in the review list; Tag Team for general tag editing.
+
+## 2026-10-12: Hall Pass 1.0.1.0 in progress (select all matching, Albums view)
+- **Core:** `ReviewQuery.Artist/Album`, `EvidenceStore.MatchingIds` (cap, truncation flag) and `Albums` (groups by artist and album with matching and total counts); `AlbumSelectionTests`.
+- **API:** `GET /HallPass/Review/Albums`; `Review` takes `Artist`, `Album`, `NoAlbum`; `Items/Decide` takes `AllMatching` with `Match...` filters (up to 20,000 tracks, returns `Changed`, `Matched`, `Truncated`).
+- **Page:** Review tab gets "Show: Albums", per-album Open / Mark all explicit / Mark all clean, and "Select all N matching" with confirmations.

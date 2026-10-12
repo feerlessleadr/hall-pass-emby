@@ -67,6 +67,12 @@ public sealed class ReviewQuery
 
 	public bool OverridesOnly { get; set; }
 
+	/// <summary>Only this artist (exact, any case). With <see cref="Album"/> it picks out one album.</summary>
+	public string? Artist { get; set; }
+
+	/// <summary>Only this album (exact, any case; empty text means tracks with no album).</summary>
+	public string? Album { get; set; }
+
 	/// <summary>Highest confidence first instead of artist, album, title.</summary>
 	public bool SortByConfidence { get; set; }
 
@@ -80,6 +86,16 @@ public sealed class QueryResult
 	public int Total { get; init; }
 
 	public IReadOnlyList<TrackRecord> Items { get; init; } = Array.Empty<TrackRecord>();
+}
+
+/// <summary>One album in the Albums view: how many of its tracks match the filters, how many it has in all, and the decisions of the matching ones.</summary>
+public sealed record AlbumGroup(string Artist, string Album, int Matching, int Total, IReadOnlyDictionary<string, int> ByDecision);
+
+public sealed class AlbumGroupResult
+{
+	public int Total { get; init; }
+
+	public IReadOnlyList<AlbumGroup> Items { get; init; } = Array.Empty<AlbumGroup>();
 }
 
 public sealed class StoreStats
@@ -201,32 +217,88 @@ public sealed class EvidenceStore
 		}
 	}
 
+	/// <summary>The tracks that match a query's filters (not its sort or paging). Call with the lock held.</summary>
+	private IEnumerable<TrackRecord> Filter(ReviewQuery query)
+	{
+		IEnumerable<TrackRecord> found = _items.Values;
+		if (query.Decisions is { Length: > 0 })
+		{
+			found = found.Where((TrackRecord r) => query.Decisions.Contains(r.Decision));
+		}
+		if (query.Reasons is { Length: > 0 })
+		{
+			found = found.Where((TrackRecord r) => query.Reasons.Contains(r.ReviewReason));
+		}
+		if (query.OverridesOnly)
+		{
+			found = found.Where((TrackRecord r) => r.Override != ManualOverride.None);
+		}
+		if (!string.IsNullOrWhiteSpace(query.Source))
+		{
+			found = found.Where((TrackRecord r) => r.Evidence.Any((EvidenceItem e) => string.Equals(e.Source, query.Source, StringComparison.OrdinalIgnoreCase)));
+		}
+		if (!string.IsNullOrWhiteSpace(query.Text))
+		{
+			string text = query.Text.Trim();
+			found = found.Where((TrackRecord r) => Contains(r.Name, text) || Contains(r.Artist, text) || Contains(r.Album, text) || Contains(r.Path, text));
+		}
+		if (query.Artist != null)
+		{
+			found = found.Where((TrackRecord r) => string.Equals(r.Artist ?? string.Empty, query.Artist, StringComparison.OrdinalIgnoreCase));
+		}
+		if (query.Album != null)
+		{
+			found = found.Where((TrackRecord r) => string.Equals(r.Album ?? string.Empty, query.Album, StringComparison.OrdinalIgnoreCase));
+		}
+		return found;
+	}
+
+	/// <summary>
+	/// The ids of every track that matches the filters (sort and paging ignored), up to <paramref name="max"/>: for "select everything that matches".
+	/// <paramref name="truncated"/> tells whether there were more.
+	/// </summary>
+	public IReadOnlyList<long> MatchingIds(ReviewQuery query, int max, out bool truncated)
+	{
+		lock (_gate)
+		{
+			List<long> ids = Filter(query).Select((TrackRecord r) => r.ItemId).OrderBy((long id) => id).ToList();
+			truncated = ids.Count > max;
+			return truncated ? ids.Take(max).ToList() : ids;
+		}
+	}
+
+	/// <summary>
+	/// The matching tracks grouped by album (artist and album, any case): how many of each album match, how many tracks it has in all, and the
+	/// decisions of the matching ones. Sorted by artist then album; the query's Skip and Take page the groups.
+	/// </summary>
+	public AlbumGroupResult Albums(ReviewQuery query)
+	{
+		lock (_gate)
+		{
+			Dictionary<(string, string), int> totals = _items.Values
+				.GroupBy((TrackRecord r) => ((r.Artist ?? string.Empty).ToLowerInvariant(), (r.Album ?? string.Empty).ToLowerInvariant()))
+				.ToDictionary((IGrouping<(string, string), TrackRecord> g) => g.Key, (IGrouping<(string, string), TrackRecord> g) => g.Count());
+			List<AlbumGroup> groups = Filter(query)
+				.GroupBy((TrackRecord r) => ((r.Artist ?? string.Empty).ToLowerInvariant(), (r.Album ?? string.Empty).ToLowerInvariant()))
+				.Select((IGrouping<(string, string), TrackRecord> g) => new AlbumGroup(
+					g.First().Artist ?? string.Empty,
+					g.First().Album ?? string.Empty,
+					g.Count(),
+					totals[g.Key],
+					g.GroupBy((TrackRecord r) => r.Decision.ToString()).ToDictionary((IGrouping<string, TrackRecord> d) => d.Key, (IGrouping<string, TrackRecord> d) => d.Count())))
+				.OrderBy((AlbumGroup a) => a.Artist, StringComparer.OrdinalIgnoreCase).ThenBy((AlbumGroup a) => a.Album, StringComparer.OrdinalIgnoreCase)
+				.ToList();
+			int skip = Math.Max(0, query.Skip);
+			int take = Math.Clamp(query.Take, 1, 200);
+			return new AlbumGroupResult { Total = groups.Count, Items = groups.Skip(skip).Take(take).ToList() };
+		}
+	}
+
 	public QueryResult Query(ReviewQuery query)
 	{
 		lock (_gate)
 		{
-			IEnumerable<TrackRecord> found = _items.Values;
-			if (query.Decisions is { Length: > 0 })
-			{
-				found = found.Where((TrackRecord r) => query.Decisions.Contains(r.Decision));
-			}
-			if (query.Reasons is { Length: > 0 })
-			{
-				found = found.Where((TrackRecord r) => query.Reasons.Contains(r.ReviewReason));
-			}
-			if (query.OverridesOnly)
-			{
-				found = found.Where((TrackRecord r) => r.Override != ManualOverride.None);
-			}
-			if (!string.IsNullOrWhiteSpace(query.Source))
-			{
-				found = found.Where((TrackRecord r) => r.Evidence.Any((EvidenceItem e) => string.Equals(e.Source, query.Source, StringComparison.OrdinalIgnoreCase)));
-			}
-			if (!string.IsNullOrWhiteSpace(query.Text))
-			{
-				string text = query.Text.Trim();
-				found = found.Where((TrackRecord r) => Contains(r.Name, text) || Contains(r.Artist, text) || Contains(r.Album, text) || Contains(r.Path, text));
-			}
+			IEnumerable<TrackRecord> found = Filter(query);
 			List<TrackRecord> list = (query.SortByConfidence
 				? found.OrderByDescending((TrackRecord r) => r.Confidence).ThenBy((TrackRecord r) => r.Artist, StringComparer.OrdinalIgnoreCase)
 				: found.OrderBy((TrackRecord r) => r.Artist, StringComparer.OrdinalIgnoreCase).ThenBy((TrackRecord r) => r.Album, StringComparer.OrdinalIgnoreCase).ThenBy((TrackRecord r) => r.Name, StringComparer.OrdinalIgnoreCase))

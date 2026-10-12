@@ -112,9 +112,19 @@
                             <option value="confidence">Highest confidence first</option>
                         </select>
                     </div>
+                    <div class="selectContainer">
+                        <select is="emby-select" id="hpFView" label="Show:">
+                            <option value="tracks">Tracks</option>
+                            <option value="albums">Albums (one click for a whole album)</option>
+                        </select>
+                    </div>
                     <div class="inputContainer">
                         <input is="emby-input" type="text" id="hpFText" label="Search artist, album or title:" />
                     </div>
+                </div>
+                <div id="hpScope" class="hide hp-note">
+                    <span id="hpScopeText"></span>
+                    <button is="emby-button" type="button" id="hpScopeClear" class="raised"><span>Show everything again</span></button>
                 </div>
                 <div class="checkboxContainer" style="margin-top: 1em;">
                     <label><input is="emby-checkbox" type="checkbox" id="hpFOverrides" /><span>Only tracks with a manual decision</span></label>
@@ -127,6 +137,7 @@
                     <button is="emby-button" type="button" id="hpMarkClean" class="raised"><span>Mark clean</span></button>
                     <button is="emby-button" type="button" id="hpClearManual" class="raised"><span>Clear manual decision</span></button>
                     <span id="hpSelCount" class="fieldDescription"></span>
+                    <a is="emby-linkbutton" href="#" id="hpSelectMatching" class="hide"></a>
                 </div>
 
                 <div id="hpReviewList"></div>

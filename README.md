@@ -38,6 +38,7 @@ After the restart, **Hall Pass** appears in the dashboard under *Advanced*.
 ## First run
 1. Open **Hall Pass > Dashboard** and press **Scan now**. Nothing is written; decisions are recorded and the counts appear.
 2. Look at the **Review** tab: filter by *Needs review* or *Explicit*, read the evidence lines, and mark tracks explicit or clean where you know better.
+   Use **Select all N matching** to cover every page, or switch to **Albums** to mark a whole album at once.
 3. On the Dashboard press **Preview changes**: it lists which tracks would get which tag (and what their tags are now). Dry run is on, so nothing has changed yet.
 4. When you are happy: **Settings > Writing tags**, untick *Dry run*, save, then press **Apply decisions** on the Dashboard.
 5. Changed your mind? **History** lists every apply with an **Undo** button. A track whose tags somebody edited since is left alone unless you tick the force box.

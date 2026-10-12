@@ -43,6 +43,9 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
             super(view, params);
             this.page = 0;
             this.total = 0;
+            this.scope = null;
+            this.allMatching = false;
+            this.lastFilters = {};
             this.pollTimer = null;
             this.dryRun = true;
             this.lastPreview = null;
@@ -79,6 +82,13 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
             view.querySelector('#hpNext').addEventListener('click', () => { if ((this.page + 1) * PAGE_SIZE < this.total) { this.page++; this.loadReview(); } });
             view.querySelector('#hpSelectAll').addEventListener('change', (e) => {
                 view.querySelectorAll('#hpReviewList .hp-pick').forEach(c => { c.checked = e.target.checked; });
+                this.updateSelectionCount();
+            });
+            view.querySelector('#hpFView').addEventListener('change', () => { this.page = 0; this.loadReview(); });
+            view.querySelector('#hpScopeClear').addEventListener('click', () => { this.scope = null; this.page = 0; this.loadReview(); });
+            view.querySelector('#hpSelectMatching').addEventListener('click', (e) => {
+                e.preventDefault();
+                this.allMatching = !this.allMatching;
                 this.updateSelectionCount();
             });
             view.querySelector('#hpMarkExplicit').addEventListener('click', () => this.decide('explicit'));
@@ -273,15 +283,30 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
 
         loadReview() {
             const view = this.view;
-            const params = {
+            const filters = {
                 Decision: view.querySelector('#hpFDecision').value,
                 Reason: view.querySelector('#hpFReason').value,
-                Sort: view.querySelector('#hpFSort').value,
                 Text: view.querySelector('#hpFText').value.trim(),
-                Overrides: view.querySelector('#hpFOverrides').checked,
+                Overrides: view.querySelector('#hpFOverrides').checked
+            };
+            this.lastFilters = filters;
+            this.allMatching = false;
+            const albums = view.querySelector('#hpFView').value === 'albums' && !this.scope;
+            const scopeBox = view.querySelector('#hpScope');
+            scopeBox.classList.toggle('hide', !this.scope);
+            if (this.scope) {
+                view.querySelector('#hpScopeText').textContent = 'Showing only ' + (this.scope.Artist || 'unknown artist') + ' / ' + (this.scope.NoAlbum ? 'tracks without an album' : this.scope.Album) + '. ';
+            }
+            view.querySelector('.hp-bulk').classList.toggle('hide', albums);
+            if (albums) {
+                this.loadAlbums(filters);
+                return;
+            }
+            const params = Object.assign({}, filters, {
+                Sort: view.querySelector('#hpFSort').value,
                 Skip: this.page * PAGE_SIZE,
                 Take: PAGE_SIZE
-            };
+            }, this.scope || {});
             loading.show();
             getJson('HallPass/Review', params).then((r) => {
                 loading.hide();
@@ -291,6 +316,84 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
                 loading.hide();
                 toast({ type: 'error', text: 'Could not load the review list.' });
             });
+        }
+
+        loadAlbums(filters) {
+            loading.show();
+            getJson('HallPass/Review/Albums', Object.assign({}, filters, { Skip: this.page * PAGE_SIZE, Take: PAGE_SIZE })).then((r) => {
+                loading.hide();
+                this.total = r.Total;
+                this.renderAlbums(r);
+            }).catch(() => {
+                loading.hide();
+                toast({ type: 'error', text: 'Could not load the albums.' });
+            });
+        }
+
+        renderAlbums(r) {
+            const view = this.view;
+            const list = view.querySelector('#hpReviewList');
+            list.textContent = '';
+            if (!r.Items.length) {
+                list.appendChild(el('div', 'hp-note', 'Nothing matches. Run a scan on the Dashboard if you have not yet, or change the filters.'));
+            } else {
+                const table = el('table', 'hp-table');
+                const head = el('tr');
+                ['Album', 'Tracks', 'Decisions', ''].forEach(h => head.appendChild(el('th', null, h)));
+                table.appendChild(head);
+                r.Items.forEach((g) => {
+                    const row = el('tr');
+                    const name = el('td');
+                    name.appendChild(el('div', null, g.Album || '(no album)'));
+                    name.appendChild(el('div', 'fieldDescription', g.Artist || '(unknown artist)'));
+                    row.appendChild(name);
+                    row.appendChild(el('td', null, g.Matching === g.Total ? String(g.Total) : g.Matching + ' of ' + g.Total));
+                    const dec = el('td');
+                    Object.keys(g.ByDecision).forEach((k) => dec.appendChild(el('div', 'fieldDescription', (LABELS[k] || k) + ': ' + g.ByDecision[k])));
+                    row.appendChild(dec);
+                    const act = el('td');
+                    const scope = { Artist: g.Artist, Album: g.Album, NoAlbum: !g.Album };
+                    const mk = (text, fn) => {
+                        const b = el('button', 'raised emby-button', text);
+                        b.setAttribute('is', 'emby-button');
+                        b.type = 'button';
+                        b.addEventListener('click', fn);
+                        act.appendChild(b);
+                    };
+                    mk('Open', () => { this.scope = scope; this.page = 0; this.view.querySelector('#hpFView').value = 'tracks'; this.loadReview(); });
+                    mk('Mark all explicit', () => this.decideAlbum('explicit', g, scope));
+                    mk('Mark all clean', () => this.decideAlbum('clean', g, scope));
+                    row.appendChild(act);
+                    table.appendChild(row);
+                });
+                list.appendChild(table);
+            }
+            const from = this.total === 0 ? 0 : this.page * PAGE_SIZE + 1;
+            const to = Math.min(this.total, (this.page + 1) * PAGE_SIZE);
+            view.querySelector('#hpPageInfo').textContent = from + ' to ' + to + ' of ' + this.total + ' albums';
+            view.querySelector('#hpPrev').disabled = this.page === 0;
+            view.querySelector('#hpNext').disabled = (this.page + 1) * PAGE_SIZE >= this.total;
+        }
+
+        matchFields(filters, scope) {
+            return {
+                AllMatching: true,
+                MatchDecision: filters.Decision,
+                MatchReason: filters.Reason,
+                MatchText: filters.Text,
+                MatchOverrides: filters.Overrides,
+                MatchArtist: scope ? scope.Artist : '',
+                MatchAlbum: scope ? scope.Album : '',
+                MatchNoAlbum: scope ? !!scope.NoAlbum : false
+            };
+        }
+
+        decideAlbum(decision, g, scope) {
+            const what = decision === 'explicit' ? 'explicit' : 'clean';
+            if (!window.confirm('Mark ' + g.Matching + ' track(s) of "' + (g.Album || 'no album') + '" by ' + (g.Artist || 'unknown artist') + ' as ' + what + '? Nothing is written to your files until you press Apply, and you can clear it afterwards.')) {
+                return;
+            }
+            this.sendDecision(Object.assign({ Decision: decision }, this.matchFields(this.lastFilters, scope)));
         }
 
         renderReview(r) {
@@ -358,7 +461,15 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
 
         updateSelectionCount() {
             const n = this.selectedIds().length;
-            this.view.querySelector('#hpSelCount').textContent = n ? n + ' selected' : '';
+            const link = this.view.querySelector('#hpSelectMatching');
+            const pageFull = n > 0 && n === this.view.querySelectorAll('#hpReviewList .hp-pick').length;
+            if (!pageFull) {
+                this.allMatching = false;
+            }
+            const more = this.total > n;
+            link.classList.toggle('hide', !(pageFull && more));
+            link.textContent = this.allMatching ? 'Only the ' + n + ' on this page' : 'Select all ' + this.total + ' matching';
+            this.view.querySelector('#hpSelCount').textContent = this.allMatching ? 'All ' + this.total + ' matching selected' : (n ? n + ' selected' : '');
         }
 
         decide(decision) {
@@ -367,10 +478,22 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
                 toast({ type: 'error', text: 'Tick at least one track first.' });
                 return;
             }
+            if (this.allMatching) {
+                const what = decision === 'clearOverride' ? 'clear the manual decision on' : 'mark as ' + decision;
+                if (!window.confirm('This will ' + what + ' ALL ' + this.total + ' tracks that match the filters, across every page. Continue?')) {
+                    return;
+                }
+                this.sendDecision(Object.assign({ Decision: decision }, this.matchFields(this.lastFilters, this.scope)));
+                return;
+            }
+            this.sendDecision({ ItemIds: ids, Decision: decision });
+        }
+
+        sendDecision(body) {
             loading.show();
-            postJson('HallPass/Items/Decide', { ItemIds: ids, Decision: decision }).then((r) => {
+            postJson('HallPass/Items/Decide', body).then((r) => {
                 loading.hide();
-                toast({ type: 'info', text: r.Changed + ' track(s) updated.' });
+                toast({ type: 'info', text: r.Changed + ' track(s) updated.' + (r.Truncated ? ' Only the first ' + r.Matched + ' matched; run it again for the rest.' : '') });
                 this.loadReview();
                 this.refreshStatus();
             }).catch(() => {

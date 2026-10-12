@@ -49,6 +49,15 @@ public class ReviewRequest : IReturn<object>
 
 	public bool Overrides { get; set; }
 
+	/// <summary>Only this artist (exact, any case). With Album it picks out one album.</summary>
+	public string Artist { get; set; }
+
+	/// <summary>Only this album (exact, any case).</summary>
+	public string Album { get; set; }
+
+	/// <summary>Only tracks that have no album.</summary>
+	public bool NoAlbum { get; set; }
+
 	/// <summary>"confidence" for highest confidence first; anything else sorts by artist, album, title.</summary>
 	public string Sort { get; set; }
 
@@ -72,6 +81,44 @@ public class DecideRequest : IReturn<object>
 
 	/// <summary>"explicit", "clean" or "clearOverride".</summary>
 	public string Decision { get; set; }
+
+	/// <summary>True: ignore ItemIds and act on every track that matches the Match... filters (the review list's filters; none at all means every track).</summary>
+	public bool AllMatching { get; set; }
+
+	public string MatchDecision { get; set; }
+
+	public string MatchReason { get; set; }
+
+	public string MatchText { get; set; }
+
+	public string MatchSource { get; set; }
+
+	public bool MatchOverrides { get; set; }
+
+	public string MatchArtist { get; set; }
+
+	public string MatchAlbum { get; set; }
+
+	public bool MatchNoAlbum { get; set; }
+}
+
+[Authenticated(Roles = "Admin")]
+[Route("/HallPass/Review/Albums", "GET", Summary = "The review list grouped by album: matching and total tracks per album.")]
+public class AlbumsRequest : IReturn<object>
+{
+	public string Decision { get; set; }
+
+	public string Reason { get; set; }
+
+	public string Text { get; set; }
+
+	public string Source { get; set; }
+
+	public bool Overrides { get; set; }
+
+	public int Skip { get; set; }
+
+	public int Take { get; set; } = 50;
 }
 
 [Authenticated(Roles = "Admin")]
@@ -175,12 +222,34 @@ public class HallPassApiService : IService
 			Text = request.Text,
 			Source = request.Source,
 			OverridesOnly = request.Overrides,
+			Artist = string.IsNullOrEmpty(request.Artist) ? null : request.Artist,
+			Album = request.NoAlbum ? string.Empty : (string.IsNullOrEmpty(request.Album) ? null : request.Album),
 			SortByConfidence = string.Equals(request.Sort, "confidence", StringComparison.OrdinalIgnoreCase),
 			Skip = request.Skip,
 			Take = request.Take <= 0 ? 50 : request.Take,
 		};
 		QueryResult result = HallPassState.Store.Query(query);
 		return new { result.Total, Items = result.Items.Select(Row).ToArray() };
+	}
+
+	public object Get(AlbumsRequest request)
+	{
+		ReviewQuery query = new ReviewQuery
+		{
+			Decisions = ParseEnums<Decision>(request.Decision),
+			Reasons = ParseEnums<ReviewReason>(request.Reason),
+			Text = request.Text,
+			Source = request.Source,
+			OverridesOnly = request.Overrides,
+			Skip = request.Skip,
+			Take = request.Take <= 0 ? 50 : request.Take,
+		};
+		AlbumGroupResult result = HallPassState.Store.Albums(query);
+		return new
+		{
+			result.Total,
+			Items = result.Items.Select((AlbumGroup g) => new { g.Artist, g.Album, g.Matching, g.Total, ByDecision = new Dictionary<string, int>(g.ByDecision) }).ToArray()
+		};
 	}
 
 	public object Get(TrackRequest request)
@@ -210,14 +279,6 @@ public class HallPassApiService : IService
 
 	public object Post(DecideRequest request)
 	{
-		if (request.ItemIds == null || request.ItemIds.Length == 0)
-		{
-			throw new ArgumentException("Choose at least one track.");
-		}
-		if (request.ItemIds.Length > 5000)
-		{
-			throw new ArgumentException("At most 5000 tracks at a time.");
-		}
 		ManualOverride choice = (request.Decision ?? string.Empty).ToLowerInvariant() switch
 		{
 			"explicit" => ManualOverride.Explicit,
@@ -225,9 +286,41 @@ public class HallPassApiService : IService
 			"clearoverride" => ManualOverride.None,
 			_ => throw new ArgumentException("Decision must be explicit, clean or clearOverride."),
 		};
-		int changed = HallPassState.Store.SetOverride(request.ItemIds, choice, HallPassState.DecisionSettingsFor(HallPassState.Config));
+		IReadOnlyList<long> ids;
+		bool truncated = false;
+		if (request.AllMatching)
+		{
+			ReviewQuery query = new ReviewQuery
+			{
+				Decisions = ParseEnums<Decision>(request.MatchDecision),
+				Reasons = ParseEnums<ReviewReason>(request.MatchReason),
+				Text = request.MatchText,
+				Source = request.MatchSource,
+				OverridesOnly = request.MatchOverrides,
+				Artist = string.IsNullOrEmpty(request.MatchArtist) ? null : request.MatchArtist,
+				Album = request.MatchNoAlbum ? string.Empty : (string.IsNullOrEmpty(request.MatchAlbum) ? null : request.MatchAlbum),
+			};
+			ids = HallPassState.Store.MatchingIds(query, 20000, out truncated);
+			if (ids.Count == 0)
+			{
+				throw new ArgumentException("No track matches.");
+			}
+		}
+		else
+		{
+			if (request.ItemIds == null || request.ItemIds.Length == 0)
+			{
+				throw new ArgumentException("Choose at least one track.");
+			}
+			if (request.ItemIds.Length > 5000)
+			{
+				throw new ArgumentException("At most 5000 tracks at a time.");
+			}
+			ids = request.ItemIds;
+		}
+		int changed = HallPassState.Store.SetOverride(ids, choice, HallPassState.DecisionSettingsFor(HallPassState.Config));
 		HallPassState.Save();
-		return new { Changed = changed };
+		return new { Changed = changed, Matched = ids.Count, Truncated = truncated };
 	}
 
 	public object Get(PreviewRequest request)
