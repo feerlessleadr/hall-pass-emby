@@ -76,8 +76,8 @@ public sealed class WordList
 		return new WordList(words, stems, allow);
 	}
 
-	/// <summary>The list that ships inside the plugin (embedded resource <c>HallPass.default-wordlist.json</c>).</summary>
-	public static WordList Default()
+	/// <summary>The text of the list that ships inside the plugin (embedded resource <c>HallPass.default-wordlist.json</c>).</summary>
+	public static string DefaultJson()
 	{
 		Assembly assembly = typeof(WordList).Assembly;
 		using Stream? stream = assembly.GetManifestResourceStream("HallPass.default-wordlist.json");
@@ -86,6 +86,8 @@ public sealed class WordList
 			throw new InvalidOperationException("The default word list is missing from the plugin.");
 		}
 		using StreamReader reader = new StreamReader(stream);
-		return Parse(reader.ReadToEnd());
+		return reader.ReadToEnd();
 	}
+
+	public static WordList Default() => Parse(DefaultJson());
 }
