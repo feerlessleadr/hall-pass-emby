@@ -68,6 +68,44 @@ public class DecideRequest : IReturn<object>
 	public string Decision { get; set; }
 }
 
+[Authenticated(Roles = "Admin")]
+[Route("/HallPass/Apply/Preview", "GET", Summary = "What 'Apply' would change: counts per tag and a sample. Always available, writes nothing.")]
+public class PreviewRequest : IReturn<object>
+{
+}
+
+[Authenticated(Roles = "Admin")]
+[Route("/HallPass/Apply", "POST", Summary = "Writes the tags from the stored decisions (refused while dry run is on).")]
+public class ApplyRequest : IReturn<object>
+{
+	/// <summary>Must be true: a deliberate click.</summary>
+	public bool Confirm { get; set; }
+
+	/// <summary>Needed as well when more than 5000 tracks would change.</summary>
+	public bool ConfirmLarge { get; set; }
+}
+
+[Authenticated(Roles = "Admin")]
+[Route("/HallPass/Write/Cancel", "POST", Summary = "Stops a running apply or undo; what was saved stays (and is in the journal).")]
+public class CancelWriteRequest : IReturn<object>
+{
+}
+
+[Authenticated(Roles = "Admin")]
+[Route("/HallPass/Jobs", "GET", Summary = "The journal: apply and undo jobs, newest first.")]
+public class JobsRequest : IReturn<object>
+{
+}
+
+[Authenticated(Roles = "Admin")]
+[Route("/HallPass/Jobs/{JobId}/Undo", "POST", Summary = "Puts back the tags a job changed (tracks edited since are left alone unless forced).")]
+public class UndoRequest : IReturn<object>
+{
+	public string JobId { get; set; }
+
+	public bool Force { get; set; }
+}
+
 public class HallPassApiService : IService
 {
 	public object Get(StatusRequest request)
@@ -77,6 +115,7 @@ public class HallPassApiService : IService
 		return new
 		{
 			Job = ScanJob.Status,
+			Write = WriteJob.Status,
 			Stats = new
 			{
 				stats.Total,
@@ -172,6 +211,125 @@ public class HallPassApiService : IService
 		int changed = HallPassState.Store.SetOverride(request.ItemIds, choice, HallPassState.DecisionSettingsFor(HallPassState.Config));
 		HallPassState.Save();
 		return new { Changed = changed };
+	}
+
+	public object Get(PreviewRequest request)
+	{
+		return BuildPreview(50);
+	}
+
+	public object Post(ApplyRequest request)
+	{
+		if (!request.Confirm)
+		{
+			throw new ArgumentException("Confirm must be true.");
+		}
+		PreviewResult preview = BuildPreview(0);
+		if (preview.WouldChange == 0)
+		{
+			return new { Started = false, Message = "Nothing to change: every track already has the right tag.", Write = WriteJob.Status };
+		}
+		if (preview.WouldChange > 5000 && !request.ConfirmLarge)
+		{
+			throw new ArgumentException(preview.WouldChange + " tracks would change. Confirm again to write that many.");
+		}
+		try
+		{
+			return new { Started = true, Message = "Started", Write = WriteJob.StartApply() };
+		}
+		catch (InvalidOperationException ex)
+		{
+			throw new ArgumentException(ex.Message);
+		}
+	}
+
+	public object Post(CancelWriteRequest request)
+	{
+		WriteJob.Cancel();
+		return WriteJob.Status;
+	}
+
+	public object Get(JobsRequest request)
+	{
+		return JournalStore.List().Select((JobSummary j) => new
+		{
+			j.JobId,
+			j.Kind,
+			j.StartedUtc,
+			j.FinishedUtc,
+			j.Unfinished,
+			j.Changed,
+			j.Unchanged,
+			j.Failed,
+			j.Conflicts,
+			j.Cancelled,
+			j.UndoOf,
+			j.UndoneBy
+		}).ToArray();
+	}
+
+	public object Post(UndoRequest request)
+	{
+		if (!JournalStore.IsValidId(request.JobId))
+		{
+			throw new ArgumentException("That is not a job id.");
+		}
+		try
+		{
+			return WriteJob.StartUndo(request.JobId, request.Force);
+		}
+		catch (InvalidOperationException ex)
+		{
+			throw new ArgumentException(ex.Message);
+		}
+	}
+
+	private sealed class PreviewResult
+	{
+		public int Total { get; set; }
+
+		public int WouldChange { get; set; }
+
+		public int Unchanged { get; set; }
+
+		public int Missing { get; set; }
+
+		public Dictionary<string, int> ByTag { get; } = new Dictionary<string, int>();
+
+		public List<object> Sample { get; } = new List<object>();
+
+		public bool DryRun { get; set; }
+	}
+
+	private static PreviewResult BuildPreview(int sampleSize)
+	{
+		PluginConfiguration c = HallPassState.Config;
+		TagNames names = WriteJob.NamesFor(c);
+		PreviewResult result = new PreviewResult { DryRun = c.DryRun };
+		foreach (TrackRecord record in HallPassState.Store.All().Where((TrackRecord r) => r.Decision != Decision.Unscanned))
+		{
+			result.Total++;
+			MediaBrowser.Controller.Entities.BaseItem item = Plugin.Instance.LibraryManager.GetItemById(record.ItemId);
+			if (item == null)
+			{
+				result.Missing++;
+				continue;
+			}
+			TagChange change = TagPlan.ForDecision(item.Tags, names, record.Decision, c.TagSkippedAsClean);
+			if (!change.Changed)
+			{
+				result.Unchanged++;
+				continue;
+			}
+			result.WouldChange++;
+			string target = names.For(record.Decision, c.TagSkippedAsClean) ?? "(no tag)";
+			result.ByTag[target] = result.ByTag.TryGetValue(target, out int n) ? n + 1 : 1;
+			if (result.Sample.Count < sampleSize)
+			{
+				result.Sample.Add(new { Id = record.ItemId, record.Name, record.Artist, Decision = record.Decision.ToString(), change.Before, change.After });
+			}
+		}
+		return result;
 	}
 
 	private static T[] ParseEnums<T>(string value) where T : struct, Enum

@@ -87,6 +87,18 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 		{
 			return "The per-word cap must be between 0 and 50.";
 		}
+		if (c.BatchSize < 1 || c.BatchSize > 2000)
+		{
+			return "The batch size must be between 1 and 2000.";
+		}
+		if (c.BatchDelayMs < 0 || c.BatchDelayMs > 5000)
+		{
+			return "The pause between batches must be between 0 and 5000 milliseconds.";
+		}
+		if (c.JournalKeepJobs < 1 || c.JournalKeepJobs > 500 || c.JournalKeepDays < 0 || c.JournalKeepDays > 3650)
+		{
+			return "The journal keeps between 1 and 500 jobs and 0 to 3650 days.";
+		}
 		c.ExplicitTag = (c.ExplicitTag ?? string.Empty).Trim();
 		c.CleanTag = (c.CleanTag ?? string.Empty).Trim();
 		c.LikelyCleanTag = (c.LikelyCleanTag ?? string.Empty).Trim();

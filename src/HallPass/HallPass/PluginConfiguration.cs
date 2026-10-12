@@ -29,6 +29,22 @@ public class PluginConfiguration : BasePluginConfiguration
 
 	public string ReviewTag { get; set; } = "explicit-review";
 
-	/// <summary>While true, scans only record decisions and no tag is written. (Tag writing is not built yet.)</summary>
+	/// <summary>While true, nothing is written to the library: scans only record decisions and "Apply" is refused (a preview of the changes is always available). The owner switches this off.</summary>
 	public bool DryRun { get; set; } = true;
+
+	/// <summary>Also tag tracks in skipped genres as clean (off: they get no tag).</summary>
+	public bool TagSkippedAsClean { get; set; }
+
+	/// <summary>Let Emby's metadata savers (NFO and so on) run after a tag change, like an edit in the dashboard. Off: only Emby's database changes.</summary>
+	public bool RunMetadataSavers { get; set; } = true;
+
+	/// <summary>How many tracks are saved at a time, and the pause between batches in milliseconds (keeps the server responsive).</summary>
+	public int BatchSize { get; set; } = 200;
+
+	public int BatchDelayMs { get; set; } = 50;
+
+	/// <summary>How many finished jobs the journal keeps (and anything younger than the days).</summary>
+	public int JournalKeepJobs { get; set; } = 25;
+
+	public int JournalKeepDays { get; set; } = 30;
 }

@@ -3,6 +3,7 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
 
     const pluginId = '6ca80343-2b60-40de-ab81-7a41628fcaf2';
     const PAGE_SIZE = 50;
+    const PAGES = '#hpDashPage, #hpReviewPage, #hpHistoryPage, #hpSettingsPage';
     const DECISIONS = [
         ['Explicit', 'Explicit', 'hp-explicit'],
         ['Review', 'Needs review', 'hp-review'],
@@ -29,12 +30,22 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
         return e;
     }
 
+    function tagList(tags) {
+        return '[' + (tags || []).join(', ') + ']';
+    }
+
+    function when(utc) {
+        return utc ? new Date(utc).toLocaleString() : '';
+    }
+
     return class extends BaseView {
         constructor(view, params) {
             super(view, params);
             this.page = 0;
             this.total = 0;
             this.pollTimer = null;
+            this.dryRun = true;
+            this.lastPreview = null;
 
             view.querySelector('.localnav').addEventListener('click', (e) => {
                 e.preventDefault();
@@ -43,8 +54,9 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
                 const id = target.getAttribute('data-target');
                 view.querySelectorAll('.localnav .nav-button').forEach(b => b.classList.remove('ui-btn-active'));
                 target.classList.add('ui-btn-active');
-                view.querySelectorAll('#hpDashPage, #hpReviewPage, #hpSettingsPage').forEach(p => p.classList.toggle('hide', p.id !== id));
+                view.querySelectorAll(PAGES).forEach(p => p.classList.toggle('hide', p.id !== id));
                 if (id === 'hpReviewPage') { this.loadReview(); }
+                if (id === 'hpHistoryPage') { this.loadHistory(); }
                 if (id === 'hpSettingsPage') { this.loadSettings(); }
                 if (id === 'hpDashPage') { this.refreshStatus(); }
             });
@@ -53,6 +65,12 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
             view.querySelector('#hpScanAll').addEventListener('click', () => this.startScan(true));
             view.querySelector('#hpCancel').addEventListener('click', () => {
                 postJson('HallPass/Scan/Cancel').then(() => this.refreshStatus());
+            });
+
+            view.querySelector('#hpPreviewBtn').addEventListener('click', () => this.preview());
+            view.querySelector('#hpApplyBtn').addEventListener('click', () => this.apply());
+            view.querySelector('#hpWriteCancel').addEventListener('click', () => {
+                postJson('HallPass/Write/Cancel').then(() => this.refreshStatus());
             });
 
             view.querySelector('#hpApplyFilters').addEventListener('click', () => { this.page = 0; this.loadReview(); });
@@ -86,6 +104,7 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
 
         renderStatus(s) {
             const view = this.view;
+            this.dryRun = !!s.DryRun;
             view.querySelector('#hpBanner').classList.toggle('hide', !s.DryRun);
             const tiles = view.querySelector('#hpTiles');
             tiles.textContent = '';
@@ -102,24 +121,145 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
                 + (s.Stats && s.Stats.Overrides ? ' ' + s.Stats.Overrides + ' with a manual decision.' : '');
 
             const job = s.Job || {};
-            const running = job.State === 'Running';
-            view.querySelector('#hpJobText').textContent = running
+            const scanning = job.State === 'Running';
+            view.querySelector('#hpJobText').textContent = scanning
                 ? 'Scanning: ' + job.Processed + ' of ' + job.Total + ' tracks (' + job.Scanned + ' looked at, ' + job.Unchanged + ' unchanged' + (job.Failed ? ', ' + job.Failed + ' failed' : '') + ')'
                 : (job.State === 'Idle' ? 'No scan has run since Emby started.' : job.Message);
             const bar = view.querySelector('#hpProgress');
             bar.max = Math.max(1, job.Total || 1);
-            bar.value = running || job.State === 'Completed' ? (job.Processed || 0) : 0;
-            view.querySelector('#hpLastScan').textContent = s.Stats && s.Stats.LastScanUtc ? 'Last track scanned: ' + new Date(s.Stats.LastScanUtc).toLocaleString() : '';
-            view.querySelector('#hpScan').disabled = running;
-            view.querySelector('#hpScanAll').disabled = running;
-            view.querySelector('#hpCancel').classList.toggle('hide', !running);
-            this.wasRunning = running;
+            bar.value = scanning || job.State === 'Completed' ? (job.Processed || 0) : 0;
+            view.querySelector('#hpLastScan').textContent = s.Stats && s.Stats.LastScanUtc ? 'Last track scanned: ' + when(s.Stats.LastScanUtc) : '';
+
+            const write = s.Write || {};
+            const writing = write.State === 'Running';
+            const busy = scanning || writing;
+            view.querySelector('#hpScan').disabled = busy;
+            view.querySelector('#hpScanAll').disabled = busy;
+            view.querySelector('#hpCancel').classList.toggle('hide', !scanning);
+
+            const wbar = view.querySelector('#hpWriteProgress');
+            wbar.classList.toggle('hide', !(writing || write.State === 'Completed' || write.State === 'Cancelled'));
+            wbar.max = Math.max(1, write.Total || 1);
+            wbar.value = write.Processed || 0;
+            view.querySelector('#hpWriteText').textContent = writing
+                ? (write.Kind === 'undo' ? 'Putting tags back: ' : 'Writing tags: ') + write.Processed + ' of ' + write.Total + ' tracks (' + write.Changed + ' changed)'
+                : (write.State && write.State !== 'Idle' ? write.Message : '');
+            view.querySelector('#hpApplyBtn').disabled = busy || this.dryRun;
+            view.querySelector('#hpPreviewBtn').disabled = busy;
+            view.querySelector('#hpWriteCancel').classList.toggle('hide', !writing);
+            view.querySelector('#hpDryRunNote').textContent = this.dryRun
+                ? 'Dry run is on, so "Apply decisions" is switched off. Turn dry run off under Settings > Writing tags when you are happy with the preview.'
+                : 'Dry run is off: "Apply decisions" writes tags to your library.';
+            this.wasBusy = busy;
+            if (this.wasWriting && !writing) { this.preview(true); }
+            this.wasWriting = writing;
         }
 
         startScan(force) {
             postJson('HallPass/Scan', { Force: force }).then(() => this.refreshStatus()).catch(() => {
-                toast({ type: 'error', text: 'Could not start the scan (is one already running?).' });
+                toast({ type: 'error', text: 'Could not start the scan (is another job running?).' });
                 this.refreshStatus();
+            });
+        }
+
+        // ----- tags: preview and apply -----------------------------------------------------------------------
+
+        preview(quiet) {
+            const view = this.view;
+            return getJson('HallPass/Apply/Preview').then((p) => {
+                this.lastPreview = p;
+                const byTag = Object.keys(p.ByTag || {}).map(k => p.ByTag[k] + ' to ' + k);
+                view.querySelector('#hpPreviewText').textContent = p.WouldChange
+                    ? p.WouldChange + ' of ' + p.Total + ' tracks would change: ' + byTag.join(', ') + '. ' + p.Unchanged + ' already have the right tag' + (p.Missing ? ', ' + p.Missing + ' are no longer in the library' : '') + '.'
+                    : 'Nothing would change: all ' + p.Unchanged + ' decided tracks already have the right tag' + (p.Missing ? ' (' + p.Missing + ' are no longer in the library)' : '') + '.';
+                const box = view.querySelector('#hpPreviewSample');
+                box.textContent = '';
+                (p.Sample || []).forEach((item) => {
+                    box.appendChild(el('div', null, item.Artist + ' - ' + item.Name + ':  ' + tagList(item.Before) + '  ->  ' + tagList(item.After)));
+                });
+                if (p.WouldChange > (p.Sample || []).length) {
+                    box.appendChild(el('div', 'fieldDescription', '... and ' + (p.WouldChange - p.Sample.length) + ' more'));
+                }
+            }).catch(() => {
+                if (!quiet) { toast({ type: 'error', text: 'Could not work out the preview.' }); }
+            });
+        }
+
+        apply() {
+            this.preview(true).then(() => {
+                const p = this.lastPreview;
+                if (!p || !p.WouldChange) {
+                    toast({ type: 'info', text: 'Nothing to change.' });
+                    return;
+                }
+                if (!window.confirm('Write tags to ' + p.WouldChange + ' tracks in your library? Every change is journalled and can be undone from the History tab.')) {
+                    return;
+                }
+                const large = p.WouldChange > 5000;
+                if (large && !window.confirm(p.WouldChange + ' is a lot of tracks. Really write them all?')) {
+                    return;
+                }
+                postJson('HallPass/Apply', { Confirm: true, ConfirmLarge: large }).then((r) => {
+                    toast({ type: 'info', text: r.Started ? 'Writing tags...' : r.Message });
+                    this.refreshStatus();
+                }).catch(() => {
+                    toast({ type: 'error', text: 'Could not start. Is dry run still on, or is another job running?' });
+                    this.refreshStatus();
+                });
+            });
+        }
+
+        // ----- history ---------------------------------------------------------------------------------------
+
+        loadHistory() {
+            const view = this.view;
+            getJson('HallPass/Jobs').then((jobs) => {
+                const list = view.querySelector('#hpHistoryList');
+                list.textContent = '';
+                if (!jobs || !jobs.length) {
+                    list.appendChild(el('div', 'hp-note', 'Nothing has been written yet.'));
+                    return;
+                }
+                const table = el('table', 'hp-table hp-history');
+                const head = el('tr');
+                ['When', 'What', 'Result', ''].forEach(h => head.appendChild(el('th', null, h)));
+                table.appendChild(head);
+                jobs.forEach((job) => {
+                    const row = el('tr');
+                    row.appendChild(el('td', null, when(job.StartedUtc)));
+                    row.appendChild(el('td', null, job.Kind === 'undo' ? 'Undo' : 'Apply decisions'));
+                    const result = el('td');
+                    result.appendChild(el('div', null, job.Unfinished ? 'Did not finish (Emby stopped, or it is still running)'
+                        : job.Changed + ' changed, ' + job.Unchanged + ' already right' + (job.Failed ? ', ' + job.Failed + ' failed' : '') + (job.Conflicts ? ', ' + job.Conflicts + ' left alone (edited since)' : '')));
+                    if (job.Cancelled) { result.appendChild(el('div', 'fieldDescription', 'Cancelled part way')); }
+                    if (job.UndoneBy) { result.appendChild(el('div', 'fieldDescription', 'Undone')); }
+                    row.appendChild(result);
+                    const action = el('td');
+                    const button = document.createElement('button');
+                    button.setAttribute('is', 'emby-button');
+                    button.type = 'button';
+                    button.className = 'raised';
+                    button.appendChild(el('span', null, 'Undo'));
+                    button.addEventListener('click', () => this.undo(job));
+                    action.appendChild(button);
+                    row.appendChild(action);
+                    table.appendChild(row);
+                });
+                list.appendChild(table);
+            }).catch(() => toast({ type: 'error', text: 'Could not load the history.' }));
+        }
+
+        undo(job) {
+            const force = this.view.querySelector('#hpForceUndo').checked;
+            if (!window.confirm('Put back the tags this job changed (' + job.Changed + ' tracks)?' + (force ? ' Tracks edited since will be overwritten.' : ' Tracks edited since are left alone.'))) {
+                return;
+            }
+            postJson('HallPass/Jobs/' + encodeURIComponent(job.JobId) + '/Undo', { Force: force }).then(() => {
+                toast({ type: 'info', text: 'Putting tags back...' });
+                this.refreshStatus();
+                setTimeout(() => this.loadHistory(), 2500);
+            }).catch(() => {
+                toast({ type: 'error', text: 'Could not start the undo (is another job running?).' });
             });
         }
 
@@ -250,6 +390,10 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
                 view.querySelector('#hpTagClean').value = c.CleanTag;
                 view.querySelector('#hpTagLikely').value = c.LikelyCleanTag;
                 view.querySelector('#hpTagReview').value = c.ReviewTag;
+                view.querySelector('#hpDryRun').checked = !!c.DryRun;
+                view.querySelector('#hpSavers').checked = !!c.RunMetadataSavers;
+                view.querySelector('#hpSkippedClean').checked = !!c.TagSkippedAsClean;
+                view.querySelector('#hpBatch').value = c.BatchSize;
             }).catch(() => {
                 loading.hide();
                 toast({ type: 'error', text: 'Could not load the settings.' });
@@ -259,6 +403,11 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
         saveSettings() {
             const view = this.view;
             const c = this.config || {};
+            const dryRun = view.querySelector('#hpDryRun').checked;
+            if (c.DryRun && !dryRun && !window.confirm('Turning dry run off lets Hall Pass change the tags of your tracks when you press "Apply decisions". Nothing is written until you do, and every change can be undone. Continue?')) {
+                view.querySelector('#hpDryRun').checked = true;
+                return;
+            }
             c.Preset = view.querySelector('#hpPreset').value;
             c.LikelyCleanConfidence = parseFloat(view.querySelector('#hpLikelyClean').value);
             c.MinWordsForClean = parseInt(view.querySelector('#hpMinWords').value, 10);
@@ -268,6 +417,10 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
             c.CleanTag = view.querySelector('#hpTagClean').value;
             c.LikelyCleanTag = view.querySelector('#hpTagLikely').value;
             c.ReviewTag = view.querySelector('#hpTagReview').value;
+            c.DryRun = dryRun;
+            c.RunMetadataSavers = view.querySelector('#hpSavers').checked;
+            c.TagSkippedAsClean = view.querySelector('#hpSkippedClean').checked;
+            c.BatchSize = parseInt(view.querySelector('#hpBatch').value, 10);
             loading.show();
             ApiClient.updatePluginConfiguration(pluginId, c).then(() => {
                 loading.hide();
@@ -275,7 +428,7 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
                 this.refreshStatus();
             }).catch(() => {
                 loading.hide();
-                toast({ type: 'error', text: 'The settings were not saved. Check the values (tag names must differ; confidence 0.1 to 0.9).' });
+                toast({ type: 'error', text: 'The settings were not saved. Check the values (tag names must differ; confidence 0.1 to 0.9; batch size 1 to 2000).' });
             });
         }
 
@@ -286,7 +439,7 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
             this.refreshStatus();
             this.pollTimer = setInterval(() => {
                 const dashVisible = !this.view.querySelector('#hpDashPage').classList.contains('hide');
-                if (dashVisible || this.wasRunning) { this.refreshStatus(); }
+                if (dashVisible || this.wasBusy) { this.refreshStatus(); }
             }, 2000);
         }
 

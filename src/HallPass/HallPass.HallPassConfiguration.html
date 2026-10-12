@@ -18,6 +18,10 @@
         .hp-table th:nth-child(1), .hp-table td:nth-child(1) { width: 2.5em; }
         .hp-table th:nth-child(3), .hp-table td:nth-child(3) { width: 9em; }
         .hp-table td { overflow-wrap: anywhere; }
+        .hp-history th:nth-child(1), .hp-history td:nth-child(1) { width: 11em; }
+        .hp-history th:nth-child(2), .hp-history td:nth-child(2) { width: 9em; }
+        .hp-history th:nth-child(3), .hp-history td:nth-child(3) { width: auto; }
+        .hp-history th:nth-child(4), .hp-history td:nth-child(4) { width: 6em; }
         .hp-table th, .hp-table td { text-align: left; padding: .5em .6em; vertical-align: top; border-bottom: 1px solid rgba(128,128,128,.25); }
         .hp-pill { display: inline-block; padding: .1em .6em; border-radius: 1em; font-size: .85em; color: #fff; background: #888; white-space: nowrap; }
         .hp-pill.hp-explicit { background: #e53935; }
@@ -38,6 +42,7 @@
             <div data-role="controlgroup" data-type="horizontal" class="localnav">
                 <a is="emby-linkbutton" class="nav-button ui-btn-active" href="#" data-role="button" data-target="hpDashPage">Dashboard</a>
                 <a is="emby-linkbutton" class="nav-button" href="#" data-role="button" data-target="hpReviewPage">Review</a>
+                <a is="emby-linkbutton" class="nav-button" href="#" data-role="button" data-target="hpHistoryPage">History</a>
                 <a is="emby-linkbutton" class="nav-button" href="#" data-role="button" data-target="hpSettingsPage">Settings</a>
             </div>
 
@@ -57,6 +62,27 @@
                     <button is="emby-button" type="button" id="hpCancel" class="raised hide"><span>Cancel</span></button>
                     <div class="fieldDescription" style="margin-top: 1em;">"Scan now" looks only at new or changed tracks. "Rescan everything" looks at every track again. Lyrics are read from Emby (embedded or .lrc files) and are never stored, only the result.</div>
                 </div>
+
+                <div class="paper-card" style="padding: 1.5em; margin-top: 1.5em;">
+                    <h3 style="margin-top: 0;">Tags</h3>
+                    <div id="hpPreviewText" class="fieldDescription">Press "Preview changes" to see what Apply would do. Nothing is written by a preview.</div>
+                    <div id="hpPreviewSample" class="hp-why" style="margin: .8em 0;"></div>
+                    <progress id="hpWriteProgress" class="hp-progress hide" value="0" max="1"></progress>
+                    <div id="hpWriteText" class="fieldDescription" style="margin-bottom: 1em;"></div>
+                    <button is="emby-button" type="button" id="hpPreviewBtn" class="raised"><span>Preview changes</span></button>
+                    <button is="emby-button" type="button" id="hpApplyBtn" class="raised button-submit"><span>Apply decisions</span></button>
+                    <button is="emby-button" type="button" id="hpWriteCancel" class="raised hide"><span>Cancel</span></button>
+                    <div id="hpDryRunNote" class="fieldDescription" style="margin-top: 1em;"></div>
+                    <div class="fieldDescription" style="margin-top: .5em;">Apply gives every decided track exactly one of the four tags (the others are taken off) and leaves all its other tags alone. It also locks the track's Tags field so a metadata refresh cannot undo the result. Every change is written to a journal: put a whole job back from the History tab.</div>
+                </div>
+            </div>
+
+            <div id="hpHistoryPage" class="hide">
+                <div class="fieldDescription" style="margin: 1em 0;">Every apply and undo is kept here (the last 25 jobs, and anything from the last 30 days). Undo puts back the tags a job changed. A track whose tags were edited since is left alone, unless you tick the box below.</div>
+                <div class="checkboxContainer">
+                    <label><input is="emby-checkbox" type="checkbox" id="hpForceUndo" /><span>Also put back tracks that were edited since (overwrites those edits)</span></label>
+                </div>
+                <div id="hpHistoryList"></div>
             </div>
 
             <div id="hpReviewPage" class="hide">
@@ -147,11 +173,31 @@
 
                     <div class="paper-card" style="padding: 1.5em; margin-top: 1.5em;">
                         <h3 style="margin-top: 0;">Tags</h3>
-                        <div class="fieldDescription" style="margin-bottom: 1em;">Hall Pass will give each track exactly one of these tags (not yet: this build writes none). Playlists can then leave out "explicit" and "explicit-review", or allow only "clean", as you like.</div>
+                        <div class="fieldDescription" style="margin-bottom: 1em;">Hall Pass gives each decided track exactly one of these tags when you press "Apply decisions" on the Dashboard (and only while dry run is off below). Playlists can then leave out "explicit" and "explicit-review", or allow only "clean", as you like.</div>
                         <div class="inputContainer"><input is="emby-input" type="text" id="hpTagExplicit" label="Explicit:" /></div>
                         <div class="inputContainer"><input is="emby-input" type="text" id="hpTagClean" label="Clean:" /></div>
                         <div class="inputContainer"><input is="emby-input" type="text" id="hpTagLikely" label="Likely clean:" /></div>
                         <div class="inputContainer"><input is="emby-input" type="text" id="hpTagReview" label="Needs review:" /></div>
+                    </div>
+
+                    <div class="paper-card" style="padding: 1.5em; margin-top: 1.5em;">
+                        <h3 style="margin-top: 0;">Writing tags</h3>
+                        <div class="checkboxContainer">
+                            <label><input is="emby-checkbox" type="checkbox" id="hpDryRun" /><span>Dry run: do not write any tags</span></label>
+                            <div class="fieldDescription">While this is ticked, Hall Pass only scans and records decisions, and "Apply decisions" is refused. Untick it when you are happy with the preview.</div>
+                        </div>
+                        <div class="checkboxContainer">
+                            <label><input is="emby-checkbox" type="checkbox" id="hpSavers" /><span>Let Emby's metadata savers run after a tag change</span></label>
+                            <div class="fieldDescription">Like an edit in the dashboard: if you keep NFO files next to your music they are updated too. Untick to change only Emby's database.</div>
+                        </div>
+                        <div class="checkboxContainer">
+                            <label><input is="emby-checkbox" type="checkbox" id="hpSkippedClean" /><span>Tag tracks in skipped genres as clean</span></label>
+                            <div class="fieldDescription">Off: they get no tag at all (and any Hall Pass tag they had is taken off).</div>
+                        </div>
+                        <div class="inputContainer">
+                            <input is="emby-input" type="number" step="10" min="1" max="2000" id="hpBatch" label="Tracks saved at a time:" />
+                            <div class="fieldDescription">Smaller batches are gentler on a busy server.</div>
+                        </div>
                     </div>
 
                     <div style="margin-top: 1.5em;">

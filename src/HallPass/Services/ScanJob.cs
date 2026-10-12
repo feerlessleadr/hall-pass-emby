@@ -63,9 +63,9 @@ internal static class ScanJob
 	{
 		lock (Gate)
 		{
-			if (_status.State == "Running")
+			if (!JobGate.TryEnter("scan"))
 			{
-				throw new InvalidOperationException("A scan is already running.");
+				throw new InvalidOperationException("A " + JobGate.Running + " job is already running.");
 			}
 			_cts = new CancellationTokenSource();
 			_status = new ScanStatus { State = "Running", Force = force, StartedUtc = DateTime.UtcNow, Message = "Starting" };
@@ -165,6 +165,10 @@ internal static class ScanJob
 			Plugin.Log("The scan failed: " + ex.GetType().Name + " " + ex.Message);
 			HallPassState.Save();
 			Update((ScanStatus s) => Copy(s, state: "Failed", finished: true, message: "The scan failed: " + ex.Message));
+		}
+		finally
+		{
+			JobGate.Exit();
 		}
 	}
 
