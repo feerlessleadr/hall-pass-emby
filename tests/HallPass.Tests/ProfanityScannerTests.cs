@@ -165,6 +165,22 @@ public class ProfanityScannerTests
 	}
 
 	[Fact]
+	public void AVeryHighScoreIsNearCertain()
+	{
+		ProfanityScanner scanner = Scanner();
+		EvidenceItem lots = scanner.ToEvidence(scanner.Scan(string.Join(" ", Enumerable.Repeat("shit", 4)) + " fuck fuck and some more words to fill the lyrics up properly so there is enough text"));
+		Assert.Equal(Verdict.Explicit, lots.Verdict);
+		Assert.Equal(0.95, lots.Confidence);
+		Assert.Contains("very high", lots.Detail);
+		// just below the line stays at the normal explicit confidence
+		EvidenceItem some = scanner.ToEvidence(scanner.Scan("shit shit shit and then some more words so the lyrics are long enough to count as text here"));
+		Assert.Equal(0.75, some.Confidence);
+		// and it beats an online "not explicit" in the decision
+		DecisionResult r = DecisionEngine.Decide(ManualOverride.None, new[] { lots, new EvidenceItem("deezer", Verdict.Clean, 0.85, "") }, DecisionSettings.Balanced);
+		Assert.Equal(Decision.Explicit, r.Decision);
+	}
+
+	[Fact]
 	public void EvidenceNeverCarriesTheLyrics()
 	{
 		ProfanityScanner scanner = Scanner();

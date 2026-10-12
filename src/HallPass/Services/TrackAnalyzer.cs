@@ -73,6 +73,29 @@ internal static class TrackAnalyzer
 			? new string[0]
 			: Enumerable.Reverse((Path.GetDirectoryName(item.Path) ?? string.Empty).Split(Path.DirectorySeparatorChar)).Take(3).ToArray();
 		record.Evidence.AddRange(TitleHeuristics.Evaluate(item.Name, audio?.Album, folders));
+
+		// Stage 1: the file's own tags (an advisory flag when there is one; the ISRC and album barcode for the online stage)
+		TrackIdentifiers ids = new TrackIdentifiers(null, null);
+		if (config.ReadFileTags)
+		{
+			FileTagInfo tags = await FileTagReader.ReadAsync(item.Path ?? string.Empty, token).ConfigureAwait(false);
+			record.Evidence.AddRange(EmbeddedTags.Evaluate(tags.Tags));
+			EvidenceItem? atom = EmbeddedTags.FromRtngAtom(tags.RtngAtom);
+			if (atom != null && atom.Verdict != Verdict.None && !record.Evidence.Any((EvidenceItem e) => e.Source == EmbeddedTags.Source && e.Verdict == atom.Verdict))
+			{
+				record.Evidence.Add(atom);
+			}
+			ids = EmbeddedTags.Identifiers(tags.Tags);
+		}
+
+		// Stage 2: online catalogs (only when switched on)
+		if (config.OnlineEnabled)
+		{
+			string primaryArtist = audio?.Artists is { Length: > 0 } ? audio.Artists[0] : string.Empty;
+			double? seconds = item.RunTimeTicks is > 0 ? item.RunTimeTicks.Value / 10_000_000.0 : null;
+			TrackInfo local = new TrackInfo(item.Name ?? string.Empty, primaryArtist, audio?.Album, seconds, ids.Isrc);
+			record.Evidence.AddRange(await OnlineStage.LookupAsync(local, ids, config, token).ConfigureAwait(false));
+		}
 		return record;
 	}
 

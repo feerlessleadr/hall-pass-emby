@@ -30,6 +30,13 @@ public sealed class ScanStatus
 	/// <summary>Tracks forgotten because they are no longer in the library.</summary>
 	public int Removed { get; init; }
 
+	/// <summary>Online lookups: questions sent to a catalog, answers that came from the saved cache, and questions that got no usable answer.</summary>
+	public int OnlineAsked { get; init; }
+
+	public int OnlineCached { get; init; }
+
+	public int OnlineFailed { get; init; }
+
 	public DateTime? StartedUtc { get; init; }
 
 	public DateTime? FinishedUtc { get; init; }
@@ -100,6 +107,7 @@ internal static class ScanJob
 		int total = 0;
 		try
 		{
+			OnlineStage.ResetCounters();
 			PluginConfiguration config = HallPassState.Config;
 			DecisionSettings settings = HallPassState.DecisionSettingsFor(config);
 			ProfanityScanner scanner = new ProfanityScanner(WordList.Default(), HallPassState.ScannerOptionsFor(config));
@@ -145,11 +153,13 @@ internal static class ScanJob
 				if (processed % 200 == 0)
 				{
 					HallPassState.Save();
+					HallPassState.SaveOnlineCache();
 				}
 			}
 
 			int removed = store.RemoveAllExcept(new HashSet<long>(items.Select((BaseItem i) => i.InternalId)));
 			HallPassState.Save();
+			HallPassState.SaveOnlineCache();
 			int pf = processed, sf = scanned, uf = unchanged, ff = failed;
 			Update((ScanStatus s) => Copy(s, state: "Completed", processed: pf, scanned: sf, unchanged: uf, failed: ff, removed: removed, finished: true,
 				message: "Done: " + sf + " scanned, " + uf + " unchanged" + (ff > 0 ? ", " + ff + " failed" : string.Empty) + (removed > 0 ? ", " + removed + " no longer in the library" : string.Empty)));
@@ -157,6 +167,7 @@ internal static class ScanJob
 		catch (OperationCanceledException)
 		{
 			HallPassState.Save();
+			HallPassState.SaveOnlineCache();
 			int p = processed, sc = scanned, un = unchanged, fa = failed;
 			Update((ScanStatus s) => Copy(s, state: "Cancelled", processed: p, scanned: sc, unchanged: un, failed: fa, finished: true, message: "Cancelled; what was scanned is kept"));
 		}
@@ -184,6 +195,9 @@ internal static class ScanJob
 			Unchanged = unchanged ?? s.Unchanged,
 			Failed = failed ?? s.Failed,
 			Removed = removed ?? s.Removed,
+			OnlineAsked = OnlineStage.Counters.Asked,
+			OnlineCached = OnlineStage.Counters.FromCache,
+			OnlineFailed = OnlineStage.Counters.Failed,
 			StartedUtc = s.StartedUtc,
 			FinishedUtc = finished ? DateTime.UtcNow : s.FinishedUtc,
 			Message = message ?? s.Message,

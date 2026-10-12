@@ -19,13 +19,16 @@ public sealed class DecisionSettings
 	/// <summary>How many different sources must say "clean" before a track is called clean.</summary>
 	public int MinCleanSources { get; init; } = 1;
 
+	/// <summary>Two or more different sources saying "clean" (for example lyrics with no scoring words and an online catalog saying not explicit), the strongest at this confidence or more, and nothing explicit: the track is clean.</summary>
+	public double CorroboratedClean { get; init; } = 0.8;
+
 	/// <summary>Clean evidence from here up (and no explicit evidence) makes a track "likely clean": probably fine, not confirmed. Below it the track goes to review.</summary>
 	public double LikelyClean { get; init; } = 0.5;
 
 	public static DecisionSettings Balanced => new DecisionSettings();
 
 	/// <summary>Lower bar for explicit, and clean needs two independent sources.</summary>
-	public static DecisionSettings Conservative => new DecisionSettings { AutoExplicit = 0.6, MinCleanSources = 2 };
+	public static DecisionSettings Conservative => new DecisionSettings { AutoExplicit = 0.6, MinCleanSources = 2, CorroboratedClean = 0.9 };
 
 	/// <summary>Higher bar for explicit and a lower one for clean.</summary>
 	public static DecisionSettings Relaxed => new DecisionSettings { AutoExplicit = 0.85, AutoClean = 0.8 };
@@ -68,7 +71,8 @@ public static class DecisionEngine
 			}
 			return new DecisionResult(Decision.Explicit, bestExplicit, ReviewReason.None, "explicit evidence " + bestExplicit.ToString("0.00"));
 		}
-		if (bestExplicit == 0 && bestClean >= settings.AutoClean && cleanSources >= settings.MinCleanSources)
+		bool corroborated = cleanSources >= 2 && bestClean >= settings.CorroboratedClean;
+		if (bestExplicit == 0 && ((bestClean >= settings.AutoClean && cleanSources >= settings.MinCleanSources) || corroborated))
 		{
 			return new DecisionResult(Decision.Clean, bestClean, ReviewReason.None, "clean evidence " + bestClean.ToString("0.00"));
 		}

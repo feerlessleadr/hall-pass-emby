@@ -83,6 +83,7 @@ internal static class HallPassState
 			AutoClean = preset.AutoClean,
 			ConflictExplicitWins = preset.ConflictExplicitWins,
 			MinCleanSources = preset.MinCleanSources,
+			CorroboratedClean = preset.CorroboratedClean,
 			LikelyClean = c.LikelyCleanConfidence,
 		};
 	}
@@ -101,11 +102,75 @@ internal static class HallPassState
 			o.ExplicitScore.ToString(),
 			o.SuspectScore.ToString(),
 			o.ExplicitConfidence.ToString("0.00"),
+			o.StrongExplicitScore + ":" + o.StrongExplicitConfidence.ToString("0.00"),
 			o.SuspectConfidence.ToString("0.00"),
 			o.CleanConfidence.ToString("0.00"),
 			o.MinWordsForClean.ToString(),
 			o.PerTermCap.ToString(),
-			string.Join(",", (c.SkipGenres ?? new string[0]).Select((string g) => g.Trim().ToLowerInvariant()).OrderBy((string g) => g, StringComparer.Ordinal)));
+			string.Join(",", (c.SkipGenres ?? new string[0]).Select((string g) => g.Trim().ToLowerInvariant()).OrderBy((string g) => g, StringComparer.Ordinal)),
+			"stages-v2",
+			c.ReadFileTags.ToString(),
+			c.OnlineEnabled.ToString(),
+			c.OnlineEnabled && c.OnlineDeezer ? "deezer" : string.Empty,
+			c.OnlineEnabled && c.OnlineITunes ? "itunes" : string.Empty);
+	}
+
+	private static OnlineCache? _online;
+
+	private static string OnlineFilePath => Path.Combine(Plugin.Instance!.AppPaths.PluginConfigurationsPath, "HallPass.OnlineCache.json");
+
+	/// <summary>The answers kept from the online catalogs (so a rescan does not ask again).</summary>
+	public static OnlineCache OnlineCache
+	{
+		get
+		{
+			lock (Gate)
+			{
+				if (_online == null)
+				{
+					string? text = null;
+					try
+					{
+						text = File.Exists(OnlineFilePath) ? File.ReadAllText(OnlineFilePath) : null;
+					}
+					catch (IOException ex)
+					{
+						Plugin.Log("Could not read the saved online answers, starting empty: " + ex.Message);
+					}
+					_online = OnlineCache.FromJson(text);
+					_online.Prune(DateTime.UtcNow, Math.Max(Config.OnlineCacheDays, Config.OnlineNegativeDays));
+				}
+				return _online;
+			}
+		}
+	}
+
+	public static void SaveOnlineCache()
+	{
+		lock (Gate)
+		{
+			if (_online == null)
+			{
+				return;
+			}
+			try
+			{
+				string temp = OnlineFilePath + ".tmp";
+				File.WriteAllText(temp, _online.ToJson());
+				if (File.Exists(OnlineFilePath))
+				{
+					File.Replace(temp, OnlineFilePath, null);
+				}
+				else
+				{
+					File.Move(temp, OnlineFilePath);
+				}
+			}
+			catch (IOException ex)
+			{
+				Plugin.Log("Could not save the online answers: " + ex.Message);
+			}
+		}
 	}
 
 	/// <summary>Works every decision out again from the stored evidence (after the thresholds changed), then saves.</summary>

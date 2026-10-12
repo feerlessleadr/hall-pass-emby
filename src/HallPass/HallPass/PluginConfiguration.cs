@@ -43,6 +43,21 @@ public class PluginConfiguration : BasePluginConfiguration
 
 	public int BatchDelayMs { get; set; } = 50;
 
+	/// <summary>Read each file's own tags with Emby's ffprobe: the advisory flag (when a file has one) and the ISRC and album barcode used for online lookups.</summary>
+	public bool ReadFileTags { get; set; } = true;
+
+	/// <summary>Online lookups (opt-in): ask Deezer and iTunes whether a track is explicit. Sends only artist, title, ISRC or album barcode. Off keeps everything on this server.</summary>
+	public bool OnlineEnabled { get; set; }
+
+	public bool OnlineDeezer { get; set; } = true;
+
+	public bool OnlineITunes { get; set; } = true;
+
+	/// <summary>How long an online answer is kept, in days (and a "nothing found" answer).</summary>
+	public int OnlineCacheDays { get; set; } = 90;
+
+	public int OnlineNegativeDays { get; set; } = 14;
+
 	/// <summary>How many finished jobs the journal keeps (and anything younger than the days).</summary>
 	public int JournalKeepJobs { get; set; } = 25;
 

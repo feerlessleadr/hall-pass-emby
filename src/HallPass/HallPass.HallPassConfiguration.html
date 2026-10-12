@@ -181,6 +181,32 @@
                     </div>
 
                     <div class="paper-card" style="padding: 1.5em; margin-top: 1.5em;">
+                        <h3 style="margin-top: 0;">What Hall Pass looks at</h3>
+                        <div class="checkboxContainer">
+                            <label><input is="emby-checkbox" type="checkbox" id="hpReadTags" /><span>Read each file's own tags</span></label>
+                            <div class="fieldDescription">Uses Emby's own ffprobe on this server. Finds an explicit/clean flag when a file has one, and the ISRC and album barcode that make online lookups precise. Nothing leaves the server.</div>
+                        </div>
+                        <div class="checkboxContainer">
+                            <label><input is="emby-checkbox" type="checkbox" id="hpOnline" /><span>Online lookups (asks Deezer and iTunes)</span></label>
+                            <div class="fieldDescription">Off by default. When on, Hall Pass asks <strong>Deezer</strong> (api.deezer.com) about a track by its ISRC, or by artist and title, and <strong>Apple iTunes</strong> (itunes.apple.com) about its album by barcode. It sends <strong>only</strong> the artist, title, ISRC or album barcode: never file names, paths, lyrics or anything about you or your server. Answers are kept on this server so nothing is asked twice, and a failure never makes a track look clean. Turn this off and nothing leaves your server.</div>
+                        </div>
+                        <div class="checkboxContainer">
+                            <label><input is="emby-checkbox" type="checkbox" id="hpDeezer" /><span>Ask Deezer</span></label>
+                        </div>
+                        <div class="checkboxContainer">
+                            <label><input is="emby-checkbox" type="checkbox" id="hpITunes" /><span>Ask iTunes (needs an album barcode in the file)</span></label>
+                            <div class="fieldDescription">iTunes allows about 20 questions a minute, so a first scan with iTunes is slow for a big library (one question per album). Deezer allows far more.</div>
+                        </div>
+                        <div class="inputContainer">
+                            <input is="emby-input" type="number" step="1" min="1" max="365" id="hpCacheDays" label="Keep an answer for (days):" />
+                        </div>
+                        <div class="inputContainer">
+                            <input is="emby-input" type="number" step="1" min="1" max="365" id="hpNegDays" label="Keep a 'nothing found' answer for (days):" />
+                        </div>
+                        <div class="fieldDescription">After changing these, press "Rescan everything" on the Dashboard so existing tracks are looked at again.</div>
+                    </div>
+
+                    <div class="paper-card" style="padding: 1.5em; margin-top: 1.5em;">
                         <h3 style="margin-top: 0;">Writing tags</h3>
                         <div class="checkboxContainer">
                             <label><input is="emby-checkbox" type="checkbox" id="hpDryRun" /><span>Dry run: do not write any tags</span></label>

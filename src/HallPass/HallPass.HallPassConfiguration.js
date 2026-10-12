@@ -122,9 +122,12 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
 
             const job = s.Job || {};
             const scanning = job.State === 'Running';
-            view.querySelector('#hpJobText').textContent = scanning
-                ? 'Scanning: ' + job.Processed + ' of ' + job.Total + ' tracks (' + job.Scanned + ' looked at, ' + job.Unchanged + ' unchanged' + (job.Failed ? ', ' + job.Failed + ' failed' : '') + ')'
-                : (job.State === 'Idle' ? 'No scan has run since Emby started.' : job.Message);
+            const online = job.OnlineAsked || job.OnlineCached || job.OnlineFailed
+                ? ' Online: ' + job.OnlineAsked + ' asked, ' + job.OnlineCached + ' from saved answers' + (job.OnlineFailed ? ', ' + job.OnlineFailed + ' without a usable answer' : '') + '.'
+                : '';
+            view.querySelector('#hpJobText').textContent = (scanning
+                ? 'Scanning: ' + job.Processed + ' of ' + job.Total + ' tracks (' + job.Scanned + ' looked at, ' + job.Unchanged + ' unchanged' + (job.Failed ? ', ' + job.Failed + ' failed' : '') + ').'
+                : (job.State === 'Idle' ? 'No scan has run since Emby started.' : job.Message)) + online;
             const bar = view.querySelector('#hpProgress');
             bar.max = Math.max(1, job.Total || 1);
             bar.value = scanning || job.State === 'Completed' ? (job.Processed || 0) : 0;
@@ -394,6 +397,12 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
                 view.querySelector('#hpSavers').checked = !!c.RunMetadataSavers;
                 view.querySelector('#hpSkippedClean').checked = !!c.TagSkippedAsClean;
                 view.querySelector('#hpBatch').value = c.BatchSize;
+                view.querySelector('#hpReadTags').checked = !!c.ReadFileTags;
+                view.querySelector('#hpOnline').checked = !!c.OnlineEnabled;
+                view.querySelector('#hpDeezer').checked = !!c.OnlineDeezer;
+                view.querySelector('#hpITunes').checked = !!c.OnlineITunes;
+                view.querySelector('#hpCacheDays').value = c.OnlineCacheDays;
+                view.querySelector('#hpNegDays').value = c.OnlineNegativeDays;
             }).catch(() => {
                 loading.hide();
                 toast({ type: 'error', text: 'Could not load the settings.' });
@@ -421,6 +430,18 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
             c.RunMetadataSavers = view.querySelector('#hpSavers').checked;
             c.TagSkippedAsClean = view.querySelector('#hpSkippedClean').checked;
             c.BatchSize = parseInt(view.querySelector('#hpBatch').value, 10);
+            c.ReadFileTags = view.querySelector('#hpReadTags').checked;
+            const wasOnline = !!c.OnlineEnabled;
+            c.OnlineEnabled = view.querySelector('#hpOnline').checked;
+            c.OnlineDeezer = view.querySelector('#hpDeezer').checked;
+            c.OnlineITunes = view.querySelector('#hpITunes').checked;
+            c.OnlineCacheDays = parseInt(view.querySelector('#hpCacheDays').value, 10);
+            c.OnlineNegativeDays = parseInt(view.querySelector('#hpNegDays').value, 10);
+            if (!wasOnline && c.OnlineEnabled && !window.confirm('Turn on online lookups? Hall Pass will ask Deezer and iTunes about your tracks, sending only the artist, title, ISRC or album barcode (never file names, paths or lyrics). You can turn this off again at any time.')) {
+                view.querySelector('#hpOnline').checked = false;
+                c.OnlineEnabled = false;
+                return;
+            }
             loading.show();
             ApiClient.updatePluginConfiguration(pluginId, c).then(() => {
                 loading.hide();

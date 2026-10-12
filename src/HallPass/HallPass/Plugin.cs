@@ -26,6 +26,8 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 
 	public ISubtitleEncoder SubtitleEncoder { get; }
 
+	public IFfmpegManager FfmpegManager { get; }
+
 	public override string Name => "Hall Pass";
 
 	public override string Description => "Finds explicit music and tags it, so a smart playlist can leave it out.";
@@ -33,7 +35,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 	// Never changes: Emby identifies the plugin by this id.
 	public override Guid Id => Guid.Parse("6ca80343-2b60-40de-ab81-7a41628fcaf2");
 
-	public Plugin(IApplicationPaths appPaths, IXmlSerializer xmlSerializer, ILibraryManager libraryManager, IMediaSourceManager mediaSourceManager, ISubtitleEncoder subtitleEncoder, ILogManager logManager)
+	public Plugin(IApplicationPaths appPaths, IXmlSerializer xmlSerializer, ILibraryManager libraryManager, IMediaSourceManager mediaSourceManager, ISubtitleEncoder subtitleEncoder, IFfmpegManager ffmpegManager, ILogManager logManager)
 		: base(appPaths, xmlSerializer)
 	{
 		Instance = this;
@@ -41,6 +43,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 		LibraryManager = libraryManager;
 		MediaSourceManager = mediaSourceManager;
 		SubtitleEncoder = subtitleEncoder;
+		FfmpegManager = ffmpegManager;
 		_logger = logManager.GetLogger("HallPass");
 	}
 
@@ -94,6 +97,10 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 		if (c.BatchDelayMs < 0 || c.BatchDelayMs > 5000)
 		{
 			return "The pause between batches must be between 0 and 5000 milliseconds.";
+		}
+		if (c.OnlineCacheDays < 1 || c.OnlineCacheDays > 365 || c.OnlineNegativeDays < 1 || c.OnlineNegativeDays > 365)
+		{
+			return "Online answers are kept between 1 and 365 days.";
 		}
 		if (c.JournalKeepJobs < 1 || c.JournalKeepJobs > 500 || c.JournalKeepDays < 0 || c.JournalKeepDays > 3650)
 		{

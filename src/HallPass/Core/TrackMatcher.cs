@@ -102,7 +102,8 @@ public static class TrackMatcher
 		return new MatchResult(0, "no match");
 	}
 
-	private static string? NormalizeIsrc(string? isrc)
+	/// <summary>The ISRC as 12 upper-case letters and digits (hyphens and spaces dropped), or null when it is not one.</summary>
+	public static string? NormalizeIsrc(string? isrc)
 	{
 		if (string.IsNullOrWhiteSpace(isrc))
 		{

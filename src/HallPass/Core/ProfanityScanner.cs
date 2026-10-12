@@ -23,6 +23,11 @@ public sealed class ScannerOptions
 
 	public double ExplicitConfidence { get; init; } = 0.75;
 
+	/// <summary>A score this high (lots of strong words) is near certain: even an online "not explicit" flag does not overrule it.</summary>
+	public int StrongExplicitScore { get; init; } = 10;
+
+	public double StrongExplicitConfidence { get; init; } = 0.95;
+
 	public double SuspectConfidence { get; init; } = 0.5;
 
 	/// <summary>Lyrics with no hits only weakly support "clean", because lyrics can be incomplete or wrong.</summary>
@@ -113,6 +118,10 @@ public sealed class ProfanityScanner
 	public EvidenceItem ToEvidence(ScanResult result, string source = "lyrics")
 	{
 		string terms = string.Join(", ", result.Hits.Select((WordHit h) => h.Count > 1 ? h.Term + " x" + h.Count : h.Term));
+		if (result.Score >= _options.StrongExplicitScore)
+		{
+			return new EvidenceItem(source, Verdict.Explicit, _options.StrongExplicitConfidence, "score " + result.Score + " (very high): " + terms);
+		}
 		if (result.Score >= _options.ExplicitScore)
 		{
 			return new EvidenceItem(source, Verdict.Explicit, _options.ExplicitConfidence, "score " + result.Score + ": " + terms);
