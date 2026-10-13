@@ -121,7 +121,7 @@ internal static class HallPassState
 			o.MinWordsForClean.ToString(),
 			o.PerTermCap.ToString(),
 			string.Join(",", (c.SkipGenres ?? new string[0]).Select((string g) => g.Trim().ToLowerInvariant()).OrderBy((string g) => g, StringComparer.Ordinal)),
-			"stages-v3-title-and-lyric-files",
+			"stages-v4-per-source-lyrics-and-ambiguous-words",
 			c.ReadFileTags.ToString(),
 			c.OnlineEnabled.ToString(),
 			c.OnlineEnabled && c.OnlineDeezer ? "deezer" : string.Empty,

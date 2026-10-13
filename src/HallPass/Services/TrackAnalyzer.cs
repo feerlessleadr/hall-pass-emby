@@ -50,8 +50,8 @@ internal static class TrackAnalyzer
 			return record;
 		}
 
-		ScanResult? best = null;
-		string? fromFile = null;
+		// every readable lyric source is scanned on its own (the lyrics embedded in the audio file, a .lrc file next to it): when they disagree the track is a conflict for a person to look at
+		List<(string Label, ScanResult Result)> scanned = new List<(string, ScanResult)>();
 		int unreadable = 0;
 		foreach (MediaStream stream in lyricStreams)
 		{
@@ -62,26 +62,22 @@ internal static class TrackAnalyzer
 				unreadable++;
 				continue;
 			}
-			ScanResult result = scanner.Scan(text);
-			if (best == null || result.Score > best.Score || (result.Score == best.Score && result.WordCount > best.WordCount))
-			{
-				best = result;
-			}
+			string label = stream.IsExternal && !string.IsNullOrEmpty(stream.Path) ? "the file " + Path.GetFileName(stream.Path) : "the lyrics embedded in the audio file";
+			scanned.Add((label, scanner.Scan(text)));
 		}
-		if (best == null)
+		if (scanned.Count == 0)
 		{
 			// Emby listed no readable lyrics: look for a .lrc or .txt file with the track's name in its folder
 			(string? sideText, string? sideFile) = SidecarLyrics.Read(item.Path);
 			if (sideText != null)
 			{
-				best = scanner.Scan(sideText);
-				fromFile = Path.GetFileName(sideFile);
+				scanned.Add(("the file " + Path.GetFileName(sideFile), scanner.Scan(sideText)));
 			}
 		}
-		if (best != null)
+		bool hasLocalLyrics = scanned.Count > 0;
+		if (hasLocalLyrics)
 		{
-			EvidenceItem lyrics = scanner.ToEvidence(best);
-			record.Evidence.Add(fromFile == null ? lyrics : lyrics with { Detail = lyrics.Detail + " (from the file " + fromFile + ")" });
+			record.Evidence.AddRange(LyricsEvidence.Combine(scanned, scanner));
 		}
 		else
 		{
@@ -118,7 +114,7 @@ internal static class TrackAnalyzer
 			TrackInfo local = new TrackInfo(item.Name ?? string.Empty, primaryArtist, audio?.Album, seconds, ids.Isrc);
 			record.Evidence.AddRange(await OnlineStage.LookupAsync(local, ids, config, token).ConfigureAwait(false));
 			// the track has no lyrics of its own: try the lyrics catalog (opt-in)
-			if (best == null && config.OnlineLyrics)
+			if (!hasLocalLyrics && config.OnlineLyrics)
 			{
 				EvidenceItem? lyrics = await LyricsStage.LookupAsync(local, scanner, config, token).ConfigureAwait(false);
 				if (lyrics != null)

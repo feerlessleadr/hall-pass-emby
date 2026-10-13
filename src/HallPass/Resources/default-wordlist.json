@@ -27,6 +27,9 @@
   "mild": [
     "damn", "hell", "crap", "arse", "pissed"
   ],
+  "exactOnly": ["cock", "dick"],
+  "nameLike": ["dick"],
+  "ambiguous": ["dick", "cock", "cocks"],
   "stems": {
     "fuck": 3,
     "shit": 3

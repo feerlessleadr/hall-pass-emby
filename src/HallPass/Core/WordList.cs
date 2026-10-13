@@ -30,11 +30,23 @@ public sealed class WordList
 	/// <summary>Words that never count.</summary>
 	public IReadOnlySet<string> Allow { get; }
 
-	public WordList(IDictionary<string, int> words, IDictionary<string, int> stems, IEnumerable<string> allow)
+	/// <summary>Words that count only as written (and with 's): "cocked" and "cocking" are not "cock", "dickens" is not "dick".</summary>
+	public IReadOnlySet<string> ExactOnly { get; }
+
+	/// <summary>Words that are also first names: written with a capital in the middle of a line ("Moby Dick", "Dick Tracy") they are a name and score nothing.</summary>
+	public IReadOnlySet<string> NameLike { get; }
+
+	/// <summary>Words with an everyday meaning too: heard once they are only a suspect (the track goes to review), heard twice or more they count in full.</summary>
+	public IReadOnlySet<string> Ambiguous { get; }
+
+	public WordList(IDictionary<string, int> words, IDictionary<string, int> stems, IEnumerable<string> allow, IEnumerable<string>? exactOnly = null, IEnumerable<string>? nameLike = null, IEnumerable<string>? ambiguous = null)
 	{
 		Words = new Dictionary<string, int>(words, StringComparer.Ordinal);
 		Stems = new Dictionary<string, int>(stems, StringComparer.Ordinal);
 		Allow = new HashSet<string>(allow, StringComparer.Ordinal);
+		ExactOnly = new HashSet<string>(exactOnly ?? Array.Empty<string>(), StringComparer.Ordinal);
+		NameLike = new HashSet<string>(nameLike ?? Array.Empty<string>(), StringComparer.Ordinal);
+		Ambiguous = new HashSet<string>(ambiguous ?? Array.Empty<string>(), StringComparer.Ordinal);
 	}
 
 	public static WordList Parse(string json)
@@ -73,7 +85,16 @@ public sealed class WordList
 		{
 			allow.AddRange(allowList.EnumerateArray().Select((JsonElement e) => e.GetString()?.Trim().ToLowerInvariant() ?? string.Empty).Where((string s) => s.Length > 0));
 		}
-		return new WordList(words, stems, allow);
+		List<string> Read(string name)
+		{
+			List<string> list = new List<string>();
+			if (root.TryGetProperty(name, out JsonElement e) && e.ValueKind == JsonValueKind.Array)
+			{
+				list.AddRange(e.EnumerateArray().Select((JsonElement x) => x.GetString()?.Trim().ToLowerInvariant() ?? string.Empty).Where((string t) => t.Length > 0));
+			}
+			return list;
+		}
+		return new WordList(words, stems, allow, Read("exactOnly"), Read("nameLike"), Read("ambiguous"));
 	}
 
 	/// <summary>The text of the list that ships inside the plugin (embedded resource <c>HallPass.default-wordlist.json</c>).</summary>
@@ -117,7 +138,7 @@ public sealed class WordList
 		HashSet<string> allowed = new HashSet<string>(Allow, StringComparer.Ordinal);
 		allowed.UnionWith(Clean(allow));
 		allowed.UnionWith(ignored);
-		return new WordList(words, stems, allowed);
+		return new WordList(words, stems, allowed, ExactOnly, NameLike, Ambiguous);
 	}
 
 	public static IReadOnlyList<string> Clean(IEnumerable<string>? list)

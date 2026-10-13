@@ -85,8 +85,11 @@ public sealed class ProfanityScanner
 		{
 			return new ScanResult(0, 0, Array.Empty<WordHit>());
 		}
-		string text = StripTimings(lyrics).Normalize(NormalizationForm.FormKC).ToLowerInvariant();
-		text = text.Replace('’', '\'').Replace('‘', '\'').Replace('´', '\'').Replace('`', '\'');
+		string written = StripTimings(lyrics).Normalize(NormalizationForm.FormKC);
+		string text = written.ToLowerInvariant();
+		text = text.Replace('\u2019', '\'').Replace('\u2018', '\'').Replace('\u00b4', '\'').Replace('`', '\'');
+		// the capitals are only looked at to tell a name from a word, and only when lower-casing kept every position
+		bool sameLength = written.Length == text.Length;
 
 		int wordCount = 0;
 		Dictionary<string, (int Weight, int Count)> hits = new Dictionary<string, (int, int)>(StringComparer.Ordinal);
@@ -104,11 +107,18 @@ public sealed class ProfanityScanner
 			(string Term, int Weight)? hit = Match(token);
 			if (hit.HasValue)
 			{
-				hits[hit.Value.Term] = hits.TryGetValue(hit.Value.Term, out (int Weight, int Count) old) ? (old.Weight, old.Count + 1) : (hit.Value.Weight, 1);
+				string term = hit.Value.Term;
+				int weight = hit.Value.Weight;
+				if (sameLength && weight > 0 && _list.NameLike.Contains(term) && LooksLikeAName(written, m.Index, m.Length))
+				{
+					term += " (a name)";
+					weight = 0;
+				}
+				hits[term] = hits.TryGetValue(term, out (int Weight, int Count) old) ? (old.Weight, old.Count + 1) : (weight, 1);
 			}
 		}
 
-		List<WordHit> list = hits.Select((KeyValuePair<string, (int Weight, int Count)> kv) => new WordHit(kv.Key, kv.Value.Weight, kv.Value.Count))
+		List<WordHit> list = hits.Select((KeyValuePair<string, (int Weight, int Count)> kv) => new WordHit(kv.Key, kv.Value.Count == 1 && kv.Value.Weight > 1 && _list.Ambiguous.Contains(kv.Key) ? 1 : kv.Value.Weight, kv.Value.Count))
 			.OrderByDescending((WordHit h) => h.Weight * h.Count).ThenBy((WordHit h) => h.Term, StringComparer.Ordinal).ToList();
 		int score = list.Sum((WordHit h) => h.Weight * (_options.PerTermCap > 0 ? Math.Min(h.Count, _options.PerTermCap) : h.Count));
 		return new ScanResult(score, wordCount, list);
@@ -136,6 +146,28 @@ public sealed class ProfanityScanner
 			return new EvidenceItem(source, Verdict.Clean, _options.CleanConfidence, "no scoring hits in " + result.WordCount + " words" + mild);
 		}
 		return new EvidenceItem(source, Verdict.None, 0, "too little text to say");
+	}
+
+	/// <summary>
+	/// True when the word at [index, index + length) is written with a capital in the middle of a line ("Moby Dick"): a name, not the word. A word that
+	/// starts a line, or a line written in capitals, says nothing about it, so those still count.
+	/// </summary>
+	private static bool LooksLikeAName(string written, int index, int length)
+	{
+		if (index < 0 || index + length > written.Length || !char.IsUpper(written[index]))
+		{
+			return false;
+		}
+		int start = written.LastIndexOf('\n', Math.Max(0, index - 1)) + 1;
+		int end = written.IndexOf('\n', index);
+		string line = end < 0 ? written.Substring(start) : written.Substring(start, end - start);
+		int letters = line.Count(char.IsLetter);
+		if (letters > 0 && line.Count(char.IsUpper) > letters * 0.7)
+		{
+			return false; // a line in capitals
+		}
+		string before = written.Substring(start, index - start);
+		return before.Any(char.IsLetterOrDigit);
 	}
 
 	// ----- matching one token ----------------------------------------------------------------------------------
@@ -252,6 +284,10 @@ public sealed class ProfanityScanner
 			{
 				string stem = c.Substring(0, c.Length - suffix.Length);
 				(string Term, int Weight)? viaStem = MatchBase(stem);
+				if (viaStem.HasValue && _list.ExactOnly.Contains(viaStem.Value.Term))
+				{
+					continue;
+				}
 				if (viaStem.HasValue)
 				{
 					return viaStem;
@@ -259,7 +295,7 @@ public sealed class ProfanityScanner
 				if (stem.Length >= 3 && stem[stem.Length - 1] == stem[stem.Length - 2])
 				{
 					(string Term, int Weight)? doubled = MatchBase(stem.Substring(0, stem.Length - 1));
-					if (doubled.HasValue)
+					if (doubled.HasValue && !_list.ExactOnly.Contains(doubled.Value.Term))
 					{
 						return doubled;
 					}
