@@ -11,8 +11,10 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
         ['Clean', 'Clean', 'hp-clean'],
         ['Skipped', 'Skipped', 'hp-skipped']
     ];
-    const LABELS = { Explicit: 'Explicit', Review: 'Review', LikelyClean: 'Likely clean', Clean: 'Clean', Skipped: 'Skipped', Unscanned: 'Not scanned' };
-    const REASONS = { NoEvidence: 'no evidence', Suspected: 'suspected', Conflict: 'conflict', WeakClean: 'faint sign of clean' };
+    const LABELS = { Explicit: 'Explicit', Review: 'Needs review', LikelyClean: 'Likely clean', Clean: 'Clean', Skipped: 'Skipped', Unscanned: 'Not scanned' };
+    const REASONS = { NoEvidence: 'No evidence', Suspected: 'Some sign of explicit content', Conflict: 'Sources disagree', WeakClean: 'Faint sign of clean' };
+    // the same reasons as a phrase that follows a count: "15 with no evidence"
+    const REASON_PHRASES = { NoEvidence: 'with no evidence', Suspected: 'with some sign of explicit content', Conflict: 'where the sources disagree', WeakClean: 'with a faint sign of clean' };
 
     function getJson(name, params) {
         return ApiClient.getJSON(ApiClient.getUrl(name, params));
@@ -20,6 +22,22 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
 
     function postJson(name, data) {
         return ApiClient.ajax({ type: 'POST', url: ApiClient.getUrl(name), data: JSON.stringify(data || {}), contentType: 'application/json', dataType: 'json' });
+    }
+
+    function plural(n, word) {
+        return n + ' ' + word + (n === 1 ? '' : 's');
+    }
+
+    // One readable sentence about a finished job, for the History tab.
+    function describeJob(job) {
+        if (job.Unfinished) {
+            return 'This job did not finish. Emby may have stopped, or it may still be running.';
+        }
+        const parts = [(job.Kind === 'undo' ? 'Put back ' : 'Changed ') + plural(job.Changed, 'item')];
+        if (job.Unchanged) { parts.push(plural(job.Unchanged, 'item') + (job.Unchanged === 1 ? ' already had' : ' already had') + ' the right tags'); }
+        if (job.Failed) { parts.push(plural(job.Failed, 'item') + ' could not be saved'); }
+        if (job.Conflicts) { parts.push(plural(job.Conflicts, 'item') + ' left alone because their tags were edited since'); }
+        return parts.join('; ') + '.';
     }
 
     // Everything that comes from a file's tags goes in with textContent, never as HTML.
@@ -83,6 +101,10 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
             view.querySelector('#hpSelectAll').addEventListener('change', (e) => {
                 view.querySelectorAll('#hpReviewList .hp-pick').forEach(c => { c.checked = e.target.checked; });
                 this.updateSelectionCount();
+            });
+            view.querySelector('#hpFOverrides').addEventListener('change', (e) => {
+                const decision = view.querySelector('#hpFDecision');
+                if (e.target.checked && decision.value === 'Review') { decision.value = ''; }
             });
             view.querySelector('#hpFView').addEventListener('change', () => { this.page = 0; this.loadReview(); });
             view.querySelector('#hpScopeClear').addEventListener('click', () => { this.scope = null; this.page = 0; this.loadReview(); });
@@ -167,7 +189,7 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
             }
 
             const reasons = (s.Stats && s.Stats.ByReason) || {};
-            const parts = Object.keys(reasons).map(k => reasons[k] + ' ' + (REASONS[k] || k));
+            const parts = Object.keys(reasons).map(k => reasons[k] + ' ' + (REASON_PHRASES[k] || k));
             view.querySelector('#hpReasons').textContent = (s.Stats ? s.Stats.Total + ' tracks known' : '') + (parts.length ? '. In review: ' + parts.join(', ') + '.' : '.')
                 + (s.Stats && s.Stats.Overrides ? ' ' + s.Stats.Overrides + ' with a manual decision.' : '');
 
@@ -249,11 +271,11 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
                     toast({ type: 'info', text: 'Nothing to change.' });
                     return;
                 }
-                if (!window.confirm('Write tags to ' + p.WouldChange + ' items (tracks, and albums or artists if the roll-up is on) in your library? Every change is journalled and can be undone from the History tab.')) {
+                if (!window.confirm('Write tags to ' + p.WouldChange + ' items in your library (tracks, plus albums and artists if you turned those on)? Every change is recorded, and you can undo it from the History tab.')) {
                     return;
                 }
                 const large = p.WouldChange > 5000;
-                if (large && !window.confirm(p.WouldChange + ' is a lot of tracks. Really write them all?')) {
+                if (large && !window.confirm(p.WouldChange + ' is a lot of tracks. Do you want to write them all?')) {
                     return;
                 }
                 postJson('HallPass/Apply', { Confirm: true, ConfirmLarge: large }).then((r) => {
@@ -274,7 +296,7 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
                 const list = view.querySelector('#hpHistoryList');
                 list.textContent = '';
                 if (!jobs || !jobs.length) {
-                    list.appendChild(el('div', 'hp-note', 'Nothing has been written yet.'));
+                    list.appendChild(el('div', 'hp-note', 'No tags have been written yet.'));
                     return;
                 }
                 const table = el('table', 'hp-table hp-history');
@@ -284,12 +306,11 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
                 jobs.forEach((job) => {
                     const row = el('tr');
                     row.appendChild(el('td', null, when(job.StartedUtc)));
-                    row.appendChild(el('td', null, job.Kind === 'undo' ? 'Undo' : (job.Kind === 'auto' ? 'Automatic (new tracks)' : 'Apply decisions')));
+                    row.appendChild(el('td', null, job.Kind === 'undo' ? 'Undo' : (job.Kind === 'auto' ? 'Automatic apply (new tracks)' : 'Apply decisions')));
                     const result = el('td');
-                    result.appendChild(el('div', null, job.Unfinished ? 'Did not finish (Emby stopped, or it is still running)'
-                        : job.Changed + ' changed, ' + job.Unchanged + ' already right' + (job.Failed ? ', ' + job.Failed + ' failed' : '') + (job.Conflicts ? ', ' + job.Conflicts + ' left alone (edited since)' : '')));
-                    if (job.Cancelled) { result.appendChild(el('div', 'fieldDescription', 'Cancelled part way')); }
-                    if (job.UndoneBy) { result.appendChild(el('div', 'fieldDescription', 'Undone')); }
+                    result.appendChild(el('div', null, describeJob(job)));
+                    if (job.Cancelled) { result.appendChild(el('div', 'fieldDescription', 'It was cancelled before it finished.')); }
+                    if (job.UndoneBy) { result.appendChild(el('div', 'fieldDescription', 'This job has since been undone.')); }
                     row.appendChild(result);
                     const action = el('td');
                     const button = document.createElement('button');
@@ -308,11 +329,11 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
 
         undo(job) {
             const force = this.view.querySelector('#hpForceUndo').checked;
-            if (!window.confirm('Put back the tags this job changed (' + job.Changed + ' tracks)?' + (force ? ' Tracks edited since will be overwritten.' : ' Tracks edited since are left alone.'))) {
+            if (!window.confirm('Put back the tags that this job changed (' + job.Changed + (job.Changed === 1 ? ' item' : ' items') + ')?' + (force ? ' Tracks that were edited since will be overwritten.' : ' Tracks that were edited since will be left alone.'))) {
                 return;
             }
             postJson('HallPass/Jobs/' + encodeURIComponent(job.JobId) + '/Undo', { Force: force }).then(() => {
-                toast({ type: 'info', text: 'Putting tags back...' });
+                toast({ type: 'info', text: 'Putting the tags back...' });
                 this.refreshStatus();
                 setTimeout(() => this.loadHistory(), 2500);
             }).catch(() => {
@@ -395,9 +416,9 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
             const list = view.querySelector('#hpReviewList');
             list.textContent = '';
             if (!r.Items.length) {
-                list.appendChild(el('div', 'hp-note', 'Nothing matches. Run a scan on the Dashboard if you have not yet, or change the filters.'));
+                list.appendChild(el('div', 'hp-note', 'Nothing matches. If you have not scanned yet, run a scan on the Dashboard. Otherwise, change the filters.'));
             } else {
-                const table = el('table', 'hp-table');
+                const table = el('table', 'hp-table hp-groups');
                 const head = el('tr');
                 ['Artist', 'Tracks', 'Decisions', ''].forEach(h => head.appendChild(el('th', null, h)));
                 table.appendChild(head);
@@ -407,7 +428,7 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
                     name.appendChild(el('div', null, g.Artist || '(unknown artist)'));
                     name.appendChild(el('div', 'fieldDescription', g.Albums + (g.Albums === 1 ? ' album' : ' albums') + (g.Plays ? ', played ' + g.Plays + ' times' : '')));
                     row.appendChild(name);
-                    row.appendChild(el('td', null, g.Matching === g.Total ? String(g.Total) : g.Matching + ' of ' + g.Total));
+                    row.appendChild(el('td', null, g.Matching === g.Total ? plural(g.Total, 'track') : g.Matching + ' of ' + plural(g.Total, 'track')));
                     const dec = el('td');
                     Object.keys(g.ByDecision).forEach((k) => dec.appendChild(el('div', 'fieldDescription', (LABELS[k] || k) + ': ' + g.ByDecision[k])));
                     row.appendChild(dec);
@@ -447,9 +468,9 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
             const list = view.querySelector('#hpReviewList');
             list.textContent = '';
             if (!r.Items.length) {
-                list.appendChild(el('div', 'hp-note', 'Nothing matches. Run a scan on the Dashboard if you have not yet, or change the filters.'));
+                list.appendChild(el('div', 'hp-note', 'Nothing matches. If you have not scanned yet, run a scan on the Dashboard. Otherwise, change the filters.'));
             } else {
-                const table = el('table', 'hp-table');
+                const table = el('table', 'hp-table hp-groups');
                 const head = el('tr');
                 ['Album', 'Tracks', 'Decisions', ''].forEach(h => head.appendChild(el('th', null, h)));
                 table.appendChild(head);
@@ -459,7 +480,7 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
                     name.appendChild(el('div', null, g.Album || '(no album)'));
                     name.appendChild(el('div', 'fieldDescription', (g.Artist || '(unknown artist)') + (g.Plays ? '  \u00b7  played ' + g.Plays + ' times' : '')));
                     row.appendChild(name);
-                    row.appendChild(el('td', null, g.Matching === g.Total ? String(g.Total) : g.Matching + ' of ' + g.Total));
+                    row.appendChild(el('td', null, g.Matching === g.Total ? plural(g.Total, 'track') : g.Matching + ' of ' + plural(g.Total, 'track')));
                     const dec = el('td');
                     Object.keys(g.ByDecision).forEach((k) => dec.appendChild(el('div', 'fieldDescription', (LABELS[k] || k) + ': ' + g.ByDecision[k])));
                     row.appendChild(dec);
@@ -527,7 +548,7 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
             list.textContent = '';
             view.querySelector('#hpSelectAll').checked = false;
             if (!r.Items.length) {
-                list.appendChild(el('div', 'hp-note', 'Nothing matches. Run a scan on the Dashboard if you have not yet, or change the filters.'));
+                list.appendChild(el('div', 'hp-note', 'Nothing matches. If you have not scanned yet, run a scan on the Dashboard. Otherwise, change the filters.'));
             } else {
                 const table = el('table', 'hp-table');
                 const head = el('tr');
@@ -557,7 +578,7 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
                         decision.appendChild(el('div', 'fieldDescription', REASONS[item.ReviewReason] || item.ReviewReason));
                     }
                     if (item.Override && item.Override !== 'None') {
-                        decision.appendChild(el('span', 'hp-manual', 'Manual: ' + item.Override.toLowerCase()));
+                        decision.appendChild(el('span', 'hp-manual', 'Your decision: ' + item.Override.toLowerCase()));
                     }
                     row.appendChild(decision);
 
@@ -609,8 +630,8 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
                 return;
             }
             if (this.allMatching) {
-                const what = decision === 'clearOverride' ? 'clear the manual decision on' : 'mark as ' + decision;
-                if (!window.confirm('This will ' + what + ' ALL ' + this.total + ' tracks that match the filters, across every page. Continue?')) {
+                const what = decision === 'clearOverride' ? 'clear your decision on' : 'mark as ' + decision;
+                if (!window.confirm('This will ' + what + ' all ' + this.total + ' tracks that match the filters, on every page and not only this one. Continue?')) {
                     return;
                 }
                 this.sendDecision(Object.assign({ Decision: decision }, this.matchFields(this.lastFilters, this.scope)));
@@ -623,7 +644,7 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
             loading.show();
             postJson('HallPass/Items/Decide', body).then((r) => {
                 loading.hide();
-                toast({ type: 'info', text: r.Changed + ' track(s) updated.' + (r.Truncated ? ' Only the first ' + r.Matched + ' matched; run it again for the rest.' : '') });
+                toast({ type: 'info', text: r.Changed + (r.Changed === 1 ? ' track was' : ' tracks were') + ' updated.' + (r.Truncated ? ' Only the first ' + r.Matched + ' were included. Run it again for the rest.' : '') });
                 this.loadReview();
                 this.refreshStatus();
             }).catch(() => {
