@@ -139,6 +139,33 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
                 tile.appendChild(el('div', 'hp-label', d[1]));
                 tiles.appendChild(tile);
             });
+            // "You are here": which step of the guide applies right now
+            {
+                const total = (s.Stats && s.Stats.Total) || 0;
+                const review = by.Review || 0;
+                const scanningNow = (s.Job && s.Job.State === 'Running');
+                let step = 1;
+                let text = 'Start with step 1: press "Scan now".';
+                if (scanningNow) {
+                    step = 1;
+                    text = 'A scan is running. Wait for it to finish, then go on to step 2.';
+                } else if (total > 0 && review > 0) {
+                    step = 2;
+                    text = review + ' tracks need a look (step 2). Open the Review tab, or carry on to steps 3 to 5 now and finish the rest later.';
+                } else if (total > 0 && s.DryRun) {
+                    step = 3;
+                    text = 'Nothing is waiting for review. Step 3: press "Preview changes". Dry run is on, so step 4 is to turn it off in Settings before you Apply.';
+                } else if (total > 0) {
+                    step = 5;
+                    text = 'Dry run is off: "Apply decisions" will write tags. Look at "Preview changes" first.';
+                }
+                if (total > 0 && review > 0 && !s.DryRun) {
+                    text += ' Dry run is already off, so Apply will write tags as soon as you press it.';
+                }
+                view.querySelectorAll('#hpGuide li').forEach(li => li.classList.toggle('hp-step-now', Number(li.dataset.step) === step));
+                view.querySelector('#hpNow').textContent = 'You are here: ' + text;
+            }
+
             const reasons = (s.Stats && s.Stats.ByReason) || {};
             const parts = Object.keys(reasons).map(k => reasons[k] + ' ' + (REASONS[k] || k));
             view.querySelector('#hpReasons').textContent = (s.Stats ? s.Stats.Total + ' tracks known' : '') + (parts.length ? '. In review: ' + parts.join(', ') + '.' : '.')
@@ -178,7 +205,7 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
             view.querySelector('#hpPreviewBtn').disabled = busy;
             view.querySelector('#hpWriteCancel').classList.toggle('hide', !writing);
             view.querySelector('#hpDryRunNote').textContent = this.dryRun
-                ? 'Dry run is on, so "Apply decisions" is switched off. Turn dry run off under Settings > Writing tags when you are happy with the preview.'
+                ? 'Dry run is on, so "Apply decisions" is switched off. When you are happy with the preview: Settings > Tags & writing > untick "Dry run" > Save. You do not need to scan again.'
                 : 'Dry run is off: "Apply decisions" writes tags to your library.';
             this.wasBusy = busy;
             if (this.wasWriting && !writing) { this.preview(true); }

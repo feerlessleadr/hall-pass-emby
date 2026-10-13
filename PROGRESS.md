@@ -77,3 +77,6 @@
 
 ## 2026-10-12: 1.1.2.0 settings page and tabs (not released)
 - The owner reported the word-list boxes had no labels (`is="emby-textarea"` does not draw its `label` attribute, unlike `emby-input`) and that Settings was one flat scroll (`paper-card` has no visible style in Emby's current theme). Fixed with explicit labels, our own `.hp-card` style and five section buttons (Scoring, Word list, Lookups, Tags & writing, Keeping up to date) inside the one form. An `invalid` listener opens the section that holds a field the browser refuses. Lesson: look at every new page section in a real browser, not only through script.
+
+## 2026-10-13: 1.1.3.0 clearer instructions (not released)
+- The owner asked what to do next with dry run on (scan, review, apply, or turn dry run off first?). Answer now on screen: a "How to use Hall Pass" card on the Dashboard with the five steps and a "You are here" line that follows the status (nothing scanned, tracks to review, dry run on and nothing to review, dry run off), clearer dry-run banner, preview note and Review tab note. The facts it states: scanning and marking are safe with dry run on; turning dry run off needs no rescan; unresolved review tracks get the explicit-review tag on Apply; a later Apply writes only differences. Checked in a browser on the test server (the page was fetched to confirm one banner and the guide).

@@ -43,6 +43,10 @@
         .hp-textfield { margin: 1em 0; }
         .hp-label { display: block; margin: 0 0 .4em 0; font-weight: 500; }
         .hp-textfield textarea { width: 100%; box-sizing: border-box; }
+        .hp-steps { margin: .5em 0 1em 1.4em; padding: 0; }
+        .hp-steps li { margin: .5em 0; padding: .3em .6em; border-radius: .4em; border-left: .3em solid transparent; }
+        .hp-steps li.hp-step-now { background: rgba(0,164,220,.18); border-left-color: #00a4dc; }
+        .hp-now { padding: .7em 1em; border-radius: .4em; background: rgba(0,164,220,.15); font-weight: 500; }
         .localnav { display: flex; flex-wrap: wrap; gap: .5em; margin: 1em 0 1.4em 0; padding-bottom: 1em; border-bottom: 1px solid rgba(128,128,128,.3); }
         .localnav .nav-button { margin: 0; padding: .6em 1.4em; border-radius: .5em; background: rgba(128,128,128,.18); font-weight: 500; }
         .localnav .nav-button:hover { background: rgba(128,128,128,.32); }
@@ -64,7 +68,19 @@
             </div>
 
             <div id="hpDashPage">
-                <div class="hp-banner" id="hpBanner">Dry run: this build only scans and records its decisions. No tag is written to your library yet.</div>
+                <div class="hp-card" id="hpGuide">
+                    <h3>How to use Hall Pass</h3>
+                    <ol class="hp-steps">
+                        <li data-step="1"><b>Scan.</b> Press "Scan now" below. This is safe while dry run is on: a scan only records what Hall Pass finds. It never changes your files.</li>
+                        <li data-step="2"><b>Review.</b> Open the Review tab and go through "Needs review": mark tracks Explicit or Clean (or a whole album at once). Your choices are saved and a later scan never overwrites them. You can stop and come back, and you do not have to finish before step 5: tracks still in review simply get the "explicit-review" tag.</li>
+                        <li data-step="3"><b>Preview.</b> Press "Preview changes" below to see exactly which tags would be written.</li>
+                        <li data-step="4"><b>Turn dry run off.</b> Settings &gt; Tags &amp; writing &gt; untick "Dry run", then Save. You do not need to scan again.</li>
+                        <li data-step="5"><b>Apply.</b> Press "Apply decisions" below. Every change is journalled: History &gt; Undo puts it back. Later, change some decisions and Apply again: only the differences are written.</li>
+                    </ol>
+                    <div id="hpNow" class="hp-now"></div>
+                </div>
+
+                <div class="hp-banner" id="hpBanner"><b>Dry run is on.</b> Scans and your decisions are recorded, but no tag is written to your library. To write tags: preview, then untick "Dry run" in Settings &gt; Tags &amp; writing, then Apply.</div>
 
                 <div class="hp-tiles" id="hpTiles"></div>
                 <div class="fieldDescription" id="hpReasons"></div>
@@ -118,6 +134,7 @@
             </div>
 
             <div id="hpReviewPage" class="hide">
+                <div class="hp-note">Mark what you can: tick tracks and press Mark explicit or Mark clean, or switch Show to Albums to do a whole album at once. Your decisions are saved straight away and never overwritten by a scan. Tracks you leave in review get the "explicit-review" tag when you Apply. Nothing is written to your files until you Apply (see the Dashboard).</div>
                 <div class="hp-filters">
                     <div class="selectContainer">
                         <select is="emby-select" id="hpFDecision" label="Decision:">
