@@ -21,3 +21,8 @@ Everything that touches Emby (reading lyric streams, writing tags, the scheduled
 - The test server may be shared: restarting it interrupts anyone playing.
 - Music files are copyrighted: do not commit them (`samples/` is ignored) and do not paste lyrics anywhere.
 - Online lookups call the real Deezer and iTunes. Keep test runs small and let the cache do its job.
+- The test library also holds real tracks the owner added (artists such as Aerosmith, The Beatles, Barenaked Ladies, Alan Menken) with **embedded lyrics (`lyrics-XXX` tag) and `.lrc` files that differ from each other**: useful for conflict and false-positive checks. Never print their text.
+- A scratch harness is the quickest way to see why a word matched: a console project that compiles `src/HallPass/Core/**/*.cs` and the embedded `default-wordlist.json` resource, calls the private `ProfanityScanner.Match` by reflection and prints token, term, weight and position. Dump embedded lyrics with `ffprobe -show_format` (Emby's copy is in `system\ffprobe.exe`).
+- Emby's browser view cache: open a fresh browser tab to see a new page; an old tab keeps stacked stale views. There is a limit on open tabs in the Claude browser pane, so close old ones.
+- Use a throw-away Emby user to test play counts (`POST /Users/{id}/PlayedItems/{itemId}` makes a count of 1) and delete it afterwards; `PlayCounts` caches for 60 s, so wait a minute after changing counts before checking order.
+- After a scan-logic change the next "Scan now" rescans everything (the evidence version changed): wait for `Status.Job.State` to leave `Running` before reading results.

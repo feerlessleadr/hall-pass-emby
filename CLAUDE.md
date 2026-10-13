@@ -24,7 +24,11 @@ Emby Server plugin that scans music tracks, decides whether each one is explicit
 - Commits are authored as `feerlessleadr <github@thecgkg.com>` (never the work email), with `git -c user.name=feerlessleadr -c user.email=github@thecgkg.com commit -F <file>` and the trailer `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>`. Push to main is allowed; tags and releases only when the owner says "publish it".
 - Never print, store or commit keys, tokens, passwords or keystores. Ask before behaviour changes; say what was NOT verified.
 
-## Where things are (updated at the first release)
-- Built through milestone 5: engine, scan, review queue and web page, tag writing with journal and undo, file tags and online lookups, nightly task and automatic scan of new tracks. `PROGRESS.md` has the log, decisions with their reasons and what was not verified. The temporary probe endpoints are gone.
-- Release: `docs/releases/v<version>.md` is the release text; the tag `v<AssemblyVersion>` triggers `.github/workflows/release.yml` (tests, build, SHA-256, provenance, GitHub release). Only when the owner says "publish it". The version also names the page cache in Emby, so bump it whenever the page changes.
-- Owner steps GitHub cannot do from here: switch on CodeQL (Settings > Code security > default setup) and immutable releases, add a repository description and topics.
+## Where things are (updated 2026-10-13, version 1.3.0.0)
+- **Start with `docs/HANDOFF.md`**: the consolidated state (releases with hashes, the evidence pipeline, decision rules, settings, API, the web page, decisions with reasons, lessons, what is not verified). `PROGRESS.md` is the dated log; `docs/DESIGN.md` is the original design (the code differs where HANDOFF says so); `docs/API-NOTES.md` has the Emby API findings.
+- Built and released through 1.3.0.0. Not built: Tag Team (separate repo `C:\dev\tag-team-emby`, empty apart from notes).
+- Release: `docs/releases/v<version>.md` is the release text and **must be committed before the tag**; the tag `v<AssemblyVersion>` triggers `.github/workflows/release.yml` (tests, build, SHA-256, provenance, GitHub release). Only when the owner says "publish it", and only after CI and the three CodeQL jobs are green on the commit.
+- Emby caches a plugin's web page per plugin version: bump `AssemblyVersion` for every change to the page (development versions in between are fine; they are never tagged).
+- Owner steps GitHub cannot do from here: CodeQL and immutable releases are on; description and topics set by the owner.
+- Copy style for anything the user reads: full plain sentences, American spelling, no sentence ending in "is"/"are", say where a setting lives.
+- Verify, do not guess: reproduce a reported problem with the real files and print only matched words and positions, never lyrics (see HANDOFF section 7).
