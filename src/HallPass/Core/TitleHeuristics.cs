@@ -31,6 +31,48 @@ public static class TitleHeuristics
 
 	private static readonly Regex RadioEdit = new Regex(@"[\(\[][^\)\]]*\bradio (?:edit|version|mix)\b[^\)\]]*[\)\]]", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+	/// <summary>Confidence when the title itself contains a severe word ("Fuck You"): a title like that is almost always an explicit track.</summary>
+	public const double SevereWordInTitle = 0.85;
+
+	/// <summary>Confidence when the title contains only a moderate word ("Ass Like That"): a hint, not a verdict.</summary>
+	public const double ModerateWordInTitle = 0.55;
+
+	/// <summary>
+	/// Profanity in the title itself. A severe word makes the track explicit evidence, a moderate word a suspect; mild words and clean titles say
+	/// nothing (a clean title proves nothing about the lyrics). Uses the same word list, stems and allowed words as the lyrics scan.
+	/// </summary>
+	public static IReadOnlyList<EvidenceItem> TitleProfanity(string? title, ProfanityScanner scanner)
+	{
+		List<EvidenceItem> found = new List<EvidenceItem>();
+		if (string.IsNullOrWhiteSpace(title))
+		{
+			return found;
+		}
+		ScanResult result = scanner.Scan(title);
+		WordHit? severe = null;
+		WordHit? moderate = null;
+		foreach (WordHit hit in result.Hits)
+		{
+			if (hit.Weight >= WordList.SevereWeight && severe == null)
+			{
+				severe = hit;
+			}
+			else if (hit.Weight >= WordList.ModerateWeight && moderate == null)
+			{
+				moderate = hit;
+			}
+		}
+		if (severe != null)
+		{
+			found.Add(new EvidenceItem("title", Verdict.Explicit, SevereWordInTitle, "the title contains \"" + severe.Term + "\""));
+		}
+		else if (moderate != null)
+		{
+			found.Add(new EvidenceItem("title", Verdict.Explicit, ModerateWordInTitle, "the title contains \"" + moderate.Term + "\" (a hint only)"));
+		}
+		return found;
+	}
+
 	/// <summary>Looks at the title, the album and the folder names above the file.</summary>
 	public static IReadOnlyList<EvidenceItem> Evaluate(string? title, string? album, IEnumerable<string>? folderNames)
 	{

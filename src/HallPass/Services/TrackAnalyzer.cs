@@ -51,12 +51,15 @@ internal static class TrackAnalyzer
 		}
 
 		ScanResult? best = null;
+		string? fromFile = null;
+		int unreadable = 0;
 		foreach (MediaStream stream in lyricStreams)
 		{
 			token.ThrowIfCancellationRequested();
 			string? text = await ReadLyricsAsync(source!, stream, token).ConfigureAwait(false);
 			if (text == null)
 			{
+				unreadable++;
 				continue;
 			}
 			ScanResult result = scanner.Scan(text);
@@ -65,10 +68,29 @@ internal static class TrackAnalyzer
 				best = result;
 			}
 		}
+		if (best == null)
+		{
+			// Emby listed no readable lyrics: look for a .lrc or .txt file with the track's name in its folder
+			(string? sideText, string? sideFile) = SidecarLyrics.Read(item.Path);
+			if (sideText != null)
+			{
+				best = scanner.Scan(sideText);
+				fromFile = Path.GetFileName(sideFile);
+			}
+		}
 		if (best != null)
 		{
-			record.Evidence.Add(scanner.ToEvidence(best));
+			EvidenceItem lyrics = scanner.ToEvidence(best);
+			record.Evidence.Add(fromFile == null ? lyrics : lyrics with { Detail = lyrics.Detail + " (from the file " + fromFile + ")" });
 		}
+		else
+		{
+			// say what was looked for, so a track with "no evidence" can be explained (tap a track to read it)
+			record.Evidence.Add(new EvidenceItem("lyrics", Verdict.None, 0, lyricStreams.Count == 0
+				? "no lyrics found: Emby lists no lyric stream for this track and there is no .lrc or .txt file with its name in its folder"
+				: lyricStreams.Count + " lyric stream(s) listed by Emby but their text could not be read" + (unreadable == lyricStreams.Count ? string.Empty : " (some)")));
+		}
+		record.Evidence.AddRange(TitleHeuristics.TitleProfanity(item.Name, scanner));
 		string[] folders = string.IsNullOrEmpty(item.Path)
 			? new string[0]
 			: Enumerable.Reverse((Path.GetDirectoryName(item.Path) ?? string.Empty).Split(Path.DirectorySeparatorChar)).Take(3).ToArray();
@@ -154,7 +176,7 @@ internal static class TrackAnalyzer
 		{
 		}
 		string streams = string.Join(";", lyricStreams.Select((MediaStream s) => s.Index + ":" + s.Codec + ":" + s.IsExternal + ":" + ExternalStamp(s)));
-		return EvidenceStore.Fingerprint(item.Path, file, streams);
+		return EvidenceStore.Fingerprint(item.Path, file, streams, SidecarLyrics.Stamp(item.Path));
 	}
 
 	private static string ExternalStamp(MediaStream stream)

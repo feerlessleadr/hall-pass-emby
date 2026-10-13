@@ -116,6 +116,31 @@ public class AlbumsRequest : IReturn<object>
 
 	public bool Overrides { get; set; }
 
+	/// <summary>"plays" for the most played first; anything else sorts by artist, album.</summary>
+	public string Sort { get; set; }
+
+	public int Skip { get; set; }
+
+	public int Take { get; set; } = 50;
+}
+
+[Authenticated(Roles = "Admin")]
+[Route("/HallPass/Review/Artists", "GET", Summary = "The review list grouped by artist: matching and total tracks and albums per artist.")]
+public class ArtistsRequest : IReturn<object>
+{
+	public string Decision { get; set; }
+
+	public string Reason { get; set; }
+
+	public string Text { get; set; }
+
+	public string Source { get; set; }
+
+	public bool Overrides { get; set; }
+
+	/// <summary>"plays" for the most played first; anything else sorts by artist.</summary>
+	public string Sort { get; set; }
+
 	public int Skip { get; set; }
 
 	public int Take { get; set; } = 50;
@@ -228,8 +253,10 @@ public class HallPassApiService : IService
 			Skip = request.Skip,
 			Take = request.Take <= 0 ? 50 : request.Take,
 		};
+		ApplyPlays(query, string.Equals(request.Sort, "plays", StringComparison.OrdinalIgnoreCase));
 		QueryResult result = HallPassState.Store.Query(query);
-		return new { result.Total, Items = result.Items.Select(Row).ToArray() };
+		IReadOnlyDictionary<long, int> plays = query.PlayCounts ?? PlayCounts.For(result.Items.Select((TrackRecord r) => r.ItemId));
+		return new { result.Total, Items = result.Items.Select((TrackRecord r) => Row(r, plays.TryGetValue(r.ItemId, out int n) ? n : 0)).ToArray() };
 	}
 
 	public object Get(AlbumsRequest request)
@@ -244,12 +271,46 @@ public class HallPassApiService : IService
 			Skip = request.Skip,
 			Take = request.Take <= 0 ? 50 : request.Take,
 		};
+		ApplyPlays(query, string.Equals(request.Sort, "plays", StringComparison.OrdinalIgnoreCase));
 		AlbumGroupResult result = HallPassState.Store.Albums(query);
 		return new
 		{
 			result.Total,
-			Items = result.Items.Select((AlbumGroup g) => new { g.Artist, g.Album, g.Matching, g.Total, ByDecision = new Dictionary<string, int>(g.ByDecision) }).ToArray()
+			Items = result.Items.Select((AlbumGroup g) => new { g.Artist, g.Album, g.Matching, g.Total, ByDecision = new Dictionary<string, int>(g.ByDecision), g.Plays }).ToArray()
 		};
+	}
+
+	public object Get(ArtistsRequest request)
+	{
+		ReviewQuery query = new ReviewQuery
+		{
+			Decisions = ParseEnums<Decision>(request.Decision),
+			Reasons = ParseEnums<ReviewReason>(request.Reason),
+			Text = request.Text,
+			Source = request.Source,
+			OverridesOnly = request.Overrides,
+			Skip = request.Skip,
+			Take = request.Take <= 0 ? 50 : request.Take,
+		};
+		ApplyPlays(query, string.Equals(request.Sort, "plays", StringComparison.OrdinalIgnoreCase));
+		ArtistGroupResult result = HallPassState.Store.Artists(query);
+		return new
+		{
+			result.Total,
+			Items = result.Items.Select((ArtistGroup g) => new { g.Artist, g.Matching, g.Total, g.Albums, ByDecision = new Dictionary<string, int>(g.ByDecision), g.Plays }).ToArray()
+		};
+	}
+
+	/// <summary>For "most played first": looks up the plays of every track the filters match (all users added up) and hands them to the query.</summary>
+	private static void ApplyPlays(ReviewQuery query, bool byPlays)
+	{
+		if (!byPlays)
+		{
+			return;
+		}
+		IReadOnlyList<long> ids = HallPassState.Store.MatchingIds(query, 50000, out bool _);
+		query.PlayCounts = PlayCounts.For(ids);
+		query.SortByPlays = true;
 	}
 
 	public object Get(TrackRequest request)
@@ -474,11 +535,12 @@ public class HallPassApiService : IService
 		return found.Count == 0 ? null : found.ToArray();
 	}
 
-	internal static object Row(TrackRecord r)
+	internal static object Row(TrackRecord r, int plays = 0)
 	{
 		return new
 		{
 			Id = r.ItemId,
+			Plays = plays,
 			r.Name,
 			r.Artist,
 			r.Album,

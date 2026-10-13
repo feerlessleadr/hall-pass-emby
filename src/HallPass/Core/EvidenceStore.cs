@@ -76,6 +76,14 @@ public sealed class ReviewQuery
 	/// <summary>Highest confidence first instead of artist, album, title.</summary>
 	public bool SortByConfidence { get; set; }
 
+	/// <summary>Most played first (the plays come from <see cref="PlayCounts"/>): tracks, albums and artists are ordered by plays, highest first, then by name.</summary>
+	public bool SortByPlays { get; set; }
+
+	/// <summary>Plays per track id (all users added up), supplied by the caller; an id that is missing counts as 0.</summary>
+	public IReadOnlyDictionary<long, int>? PlayCounts { get; set; }
+
+	public int PlaysOf(long itemId) => PlayCounts != null && PlayCounts.TryGetValue(itemId, out int n) ? n : 0;
+
 	public int Skip { get; set; }
 
 	public int Take { get; set; } = 50;
@@ -89,7 +97,17 @@ public sealed class QueryResult
 }
 
 /// <summary>One album in the Albums view: how many of its tracks match the filters, how many it has in all, and the decisions of the matching ones.</summary>
-public sealed record AlbumGroup(string Artist, string Album, int Matching, int Total, IReadOnlyDictionary<string, int> ByDecision);
+public sealed record AlbumGroup(string Artist, string Album, int Matching, int Total, IReadOnlyDictionary<string, int> ByDecision, int Plays = 0);
+
+/// <summary>One artist in the Artists view: how many of their tracks match the filters, how many they have in all, over how many albums, and the decisions of the matching ones.</summary>
+public sealed record ArtistGroup(string Artist, int Matching, int Total, int Albums, IReadOnlyDictionary<string, int> ByDecision, int Plays = 0);
+
+public sealed class ArtistGroupResult
+{
+	public int Total { get; init; }
+
+	public IReadOnlyList<ArtistGroup> Items { get; init; } = Array.Empty<ArtistGroup>();
+}
 
 public sealed class AlbumGroupResult
 {
@@ -285,12 +303,45 @@ public sealed class EvidenceStore
 					g.First().Album ?? string.Empty,
 					g.Count(),
 					totals[g.Key],
-					g.GroupBy((TrackRecord r) => r.Decision.ToString()).ToDictionary((IGrouping<string, TrackRecord> d) => d.Key, (IGrouping<string, TrackRecord> d) => d.Count())))
-				.OrderBy((AlbumGroup a) => a.Artist, StringComparer.OrdinalIgnoreCase).ThenBy((AlbumGroup a) => a.Album, StringComparer.OrdinalIgnoreCase)
+					g.GroupBy((TrackRecord r) => r.Decision.ToString()).ToDictionary((IGrouping<string, TrackRecord> d) => d.Key, (IGrouping<string, TrackRecord> d) => d.Count()),
+					g.Sum((TrackRecord r) => query.PlaysOf(r.ItemId))))
 				.ToList();
+			groups = (query.SortByPlays
+				? groups.OrderByDescending((AlbumGroup a) => a.Plays).ThenBy((AlbumGroup a) => a.Artist, StringComparer.OrdinalIgnoreCase).ThenBy((AlbumGroup a) => a.Album, StringComparer.OrdinalIgnoreCase)
+				: groups.OrderBy((AlbumGroup a) => a.Artist, StringComparer.OrdinalIgnoreCase).ThenBy((AlbumGroup a) => a.Album, StringComparer.OrdinalIgnoreCase)).ToList();
 			int skip = Math.Max(0, query.Skip);
 			int take = Math.Clamp(query.Take, 1, 200);
 			return new AlbumGroupResult { Total = groups.Count, Items = groups.Skip(skip).Take(take).ToList() };
+		}
+	}
+
+	/// <summary>
+	/// The matching tracks grouped by artist (any case): how many of each artist's tracks match, how many they have in all, over how many albums,
+	/// and the decisions of the matching ones. Sorted by artist (or most played first); the query's Skip and Take page the groups.
+	/// </summary>
+	public ArtistGroupResult Artists(ReviewQuery query)
+	{
+		lock (_gate)
+		{
+			Dictionary<string, int> totals = _items.Values
+				.GroupBy((TrackRecord r) => (r.Artist ?? string.Empty).ToLowerInvariant())
+				.ToDictionary((IGrouping<string, TrackRecord> g) => g.Key, (IGrouping<string, TrackRecord> g) => g.Count());
+			List<ArtistGroup> groups = Filter(query)
+				.GroupBy((TrackRecord r) => (r.Artist ?? string.Empty).ToLowerInvariant())
+				.Select((IGrouping<string, TrackRecord> g) => new ArtistGroup(
+					g.First().Artist ?? string.Empty,
+					g.Count(),
+					totals[g.Key],
+					g.Select((TrackRecord r) => (r.Album ?? string.Empty).ToLowerInvariant()).Distinct().Count(),
+					g.GroupBy((TrackRecord r) => r.Decision.ToString()).ToDictionary((IGrouping<string, TrackRecord> d) => d.Key, (IGrouping<string, TrackRecord> d) => d.Count()),
+					g.Sum((TrackRecord r) => query.PlaysOf(r.ItemId))))
+				.ToList();
+			groups = (query.SortByPlays
+				? groups.OrderByDescending((ArtistGroup a) => a.Plays).ThenBy((ArtistGroup a) => a.Artist, StringComparer.OrdinalIgnoreCase)
+				: groups.OrderBy((ArtistGroup a) => a.Artist, StringComparer.OrdinalIgnoreCase)).ToList();
+			int skip = Math.Max(0, query.Skip);
+			int take = Math.Clamp(query.Take, 1, 200);
+			return new ArtistGroupResult { Total = groups.Count, Items = groups.Skip(skip).Take(take).ToList() };
 		}
 	}
 
@@ -299,7 +350,9 @@ public sealed class EvidenceStore
 		lock (_gate)
 		{
 			IEnumerable<TrackRecord> found = Filter(query);
-			List<TrackRecord> list = (query.SortByConfidence
+			List<TrackRecord> list = (query.SortByPlays
+				? found.OrderByDescending((TrackRecord r) => query.PlaysOf(r.ItemId)).ThenBy((TrackRecord r) => r.Artist, StringComparer.OrdinalIgnoreCase).ThenBy((TrackRecord r) => r.Album, StringComparer.OrdinalIgnoreCase).ThenBy((TrackRecord r) => r.Name, StringComparer.OrdinalIgnoreCase)
+				: query.SortByConfidence
 				? found.OrderByDescending((TrackRecord r) => r.Confidence).ThenBy((TrackRecord r) => r.Artist, StringComparer.OrdinalIgnoreCase)
 				: found.OrderBy((TrackRecord r) => r.Artist, StringComparer.OrdinalIgnoreCase).ThenBy((TrackRecord r) => r.Album, StringComparer.OrdinalIgnoreCase).ThenBy((TrackRecord r) => r.Name, StringComparer.OrdinalIgnoreCase))
 				.ThenBy((TrackRecord r) => r.ItemId).ToList();

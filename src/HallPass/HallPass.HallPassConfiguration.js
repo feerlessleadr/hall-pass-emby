@@ -332,22 +332,29 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
             };
             this.lastFilters = filters;
             this.allMatching = false;
-            const albums = view.querySelector('#hpFView').value === 'albums' && !this.scope;
+            const mode = this.scope ? 'tracks' : view.querySelector('#hpFView').value;
+            const albums = mode === 'albums';
+            const artists = mode === 'artists';
             const scopeBox = view.querySelector('#hpScope');
             scopeBox.classList.toggle('hide', !this.scope);
             if (this.scope) {
-                view.querySelector('#hpScopeText').textContent = 'Showing only ' + (this.scope.Artist || 'unknown artist') + ' / ' + (this.scope.NoAlbum ? 'tracks without an album' : this.scope.Album) + '. ';
+                view.querySelector('#hpScopeText').textContent = 'Showing only ' + (this.scope.Artist || 'unknown artist') + (this.scope.AllAlbums ? ' (all albums)' : ' / ' + (this.scope.NoAlbum ? 'tracks without an album' : this.scope.Album)) + '. ';
             }
-            view.querySelector('.hp-bulk').classList.toggle('hide', albums);
+            view.querySelector('.hp-bulk').classList.toggle('hide', albums || artists);
+            const sort = view.querySelector('#hpFSort').value;
             if (albums) {
-                this.loadAlbums(filters);
+                this.loadAlbums(filters, sort);
+                return;
+            }
+            if (artists) {
+                this.loadArtists(filters, sort);
                 return;
             }
             const params = Object.assign({}, filters, {
                 Sort: view.querySelector('#hpFSort').value,
                 Skip: this.page * PAGE_SIZE,
                 Take: PAGE_SIZE
-            }, this.scope || {});
+            }, this.scopeParams());
             loading.show();
             getJson('HallPass/Review', params).then((r) => {
                 loading.hide();
@@ -359,9 +366,9 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
             });
         }
 
-        loadAlbums(filters) {
+        loadAlbums(filters, sort) {
             loading.show();
-            getJson('HallPass/Review/Albums', Object.assign({}, filters, { Skip: this.page * PAGE_SIZE, Take: PAGE_SIZE })).then((r) => {
+            getJson('HallPass/Review/Albums', Object.assign({}, filters, { Sort: sort, Skip: this.page * PAGE_SIZE, Take: PAGE_SIZE })).then((r) => {
                 loading.hide();
                 this.total = r.Total;
                 this.renderAlbums(r);
@@ -369,6 +376,70 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
                 loading.hide();
                 toast({ type: 'error', text: 'Could not load the albums.' });
             });
+        }
+
+        loadArtists(filters, sort) {
+            loading.show();
+            getJson('HallPass/Review/Artists', Object.assign({}, filters, { Sort: sort, Skip: this.page * PAGE_SIZE, Take: PAGE_SIZE })).then((r) => {
+                loading.hide();
+                this.total = r.Total;
+                this.renderArtists(r);
+            }).catch(() => {
+                loading.hide();
+                toast({ type: 'error', text: 'Could not load the artists.' });
+            });
+        }
+
+        renderArtists(r) {
+            const view = this.view;
+            const list = view.querySelector('#hpReviewList');
+            list.textContent = '';
+            if (!r.Items.length) {
+                list.appendChild(el('div', 'hp-note', 'Nothing matches. Run a scan on the Dashboard if you have not yet, or change the filters.'));
+            } else {
+                const table = el('table', 'hp-table');
+                const head = el('tr');
+                ['Artist', 'Tracks', 'Decisions', ''].forEach(h => head.appendChild(el('th', null, h)));
+                table.appendChild(head);
+                r.Items.forEach((g) => {
+                    const row = el('tr');
+                    const name = el('td');
+                    name.appendChild(el('div', null, g.Artist || '(unknown artist)'));
+                    name.appendChild(el('div', 'fieldDescription', g.Albums + (g.Albums === 1 ? ' album' : ' albums') + (g.Plays ? ', played ' + g.Plays + ' times' : '')));
+                    row.appendChild(name);
+                    row.appendChild(el('td', null, g.Matching === g.Total ? String(g.Total) : g.Matching + ' of ' + g.Total));
+                    const dec = el('td');
+                    Object.keys(g.ByDecision).forEach((k) => dec.appendChild(el('div', 'fieldDescription', (LABELS[k] || k) + ': ' + g.ByDecision[k])));
+                    row.appendChild(dec);
+                    const act = el('td');
+                    const scope = { Artist: g.Artist, Album: '', NoAlbum: false, AllAlbums: true };
+                    const mk = (text, fn) => {
+                        const b = el('button', 'raised emby-button', text);
+                        b.setAttribute('is', 'emby-button');
+                        b.type = 'button';
+                        b.addEventListener('click', fn);
+                        act.appendChild(b);
+                    };
+                    mk('Open', () => { this.scope = scope; this.page = 0; this.view.querySelector('#hpFView').value = 'tracks'; this.loadReview(); });
+                    mk('Mark all explicit', () => this.decideGroup('explicit', g.Matching, g.Artist || 'unknown artist', scope));
+                    mk('Mark all clean', () => this.decideGroup('clean', g.Matching, g.Artist || 'unknown artist', scope));
+                    row.appendChild(act);
+                    table.appendChild(row);
+                });
+                list.appendChild(table);
+            }
+            const from = this.total === 0 ? 0 : this.page * PAGE_SIZE + 1;
+            const to = Math.min(this.total, (this.page + 1) * PAGE_SIZE);
+            view.querySelector('#hpPageInfo').textContent = from + ' to ' + to + ' of ' + this.total + ' artists';
+            view.querySelector('#hpPrev').disabled = this.page === 0;
+            view.querySelector('#hpNext').disabled = (this.page + 1) * PAGE_SIZE >= this.total;
+        }
+
+        decideGroup(decision, count, what, scope) {
+            if (!window.confirm('Mark ' + count + ' track(s) of ' + what + ' as ' + decision + '? Nothing is written to your files until you Apply, and you can clear the decision afterwards.')) {
+                return;
+            }
+            this.sendDecision(Object.assign({ Decision: decision }, this.matchFields(this.lastFilters, scope)));
         }
 
         renderAlbums(r) {
@@ -386,7 +457,7 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
                     const row = el('tr');
                     const name = el('td');
                     name.appendChild(el('div', null, g.Album || '(no album)'));
-                    name.appendChild(el('div', 'fieldDescription', g.Artist || '(unknown artist)'));
+                    name.appendChild(el('div', 'fieldDescription', (g.Artist || '(unknown artist)') + (g.Plays ? '  \u00b7  played ' + g.Plays + ' times' : '')));
                     row.appendChild(name);
                     row.appendChild(el('td', null, g.Matching === g.Total ? String(g.Total) : g.Matching + ' of ' + g.Total));
                     const dec = el('td');
@@ -414,6 +485,19 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
             view.querySelector('#hpPageInfo').textContent = from + ' to ' + to + ' of ' + this.total + ' albums';
             view.querySelector('#hpPrev').disabled = this.page === 0;
             view.querySelector('#hpNext').disabled = (this.page + 1) * PAGE_SIZE >= this.total;
+        }
+
+        /** The artist (and album) the list is narrowed to, as request parameters; nothing is added for a missing album so "all albums" stays all. */
+        scopeParams() {
+            const p = {};
+            if (this.scope) {
+                p.Artist = this.scope.Artist;
+                if (!this.scope.AllAlbums) {
+                    p.Album = this.scope.Album;
+                    if (this.scope.NoAlbum) { p.NoAlbum = true; }
+                }
+            }
+            return p;
         }
 
         matchFields(filters, scope) {
@@ -462,7 +546,7 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
 
                     const name = el('td');
                     name.appendChild(el('div', null, item.Name));
-                    name.appendChild(el('div', 'fieldDescription', [item.Artist, item.Album].filter(Boolean).join(' / ')));
+                    name.appendChild(el('div', 'fieldDescription', [item.Artist, item.Album].filter(Boolean).join(' / ') + (item.Plays ? '  \u00b7  played ' + item.Plays + (item.Plays === 1 ? ' time' : ' times') : '')));
                     row.appendChild(name);
 
                     const decision = el('td');
