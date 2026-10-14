@@ -3,9 +3,10 @@
 **Status: built in 1.4.0.0.** This file describes what the plugin really sends. It follows the shared push contract of the Embidextrous app (`docs/push-contract.md` in that repo), which Label Maker implemented first (`docs/NOTIFICATIONS.md` in the Label Maker repo). Sample payloads are in `docs/reference/notification-samples.json`; a unit test fails when those samples and the real catalog or event fields drift apart.
 
 ## 1. How it works
-1. **Push.** When something worth an alert happens, the plugin calls Emby's `ISessionManager.SendMessageToAdminSessions(name, data, cancellation)`. The message arrives as `{"MessageType":"HallPass.ScanFinished","Data":{...}}` on the websocket of every connected **administrator** session. A non-administrator session and a socket opened with only an API key get nothing. It is fire and forget: the sender logs a failure and swallows it, so an alert can never break a scan or a write job.
-2. **Catch-up.** Every event gets a number `Seq` and is kept in a small log (the last 500 events). `GET /emby/HallPass/Events?After=<seq>&Limit=100` returns what an app missed. The app dedupes by `Seq`.
-3. **Catalog.** `GET /emby/HallPass/Notifications/Catalog` describes every event (title, description, parameters, suggested rule, lock-screen text) so the app can build its rule screen from the server.
+1. **Subscription (how the app receives alerts).** The app connects to Emby's websocket with its token in the `X-Emby-Token` header, so Emby does not link that socket to a user session and `SendMessageToAdminSessions` never reaches it. The app therefore subscribes, the way Hall Monitor's live status works: it sends `{"MessageType":"HallPassEventsStart","Data":"0,30000,<afterSeq>"}` and the plugin pushes to that one socket. Details in section 5b.
+2. **Push to Emby's own admin sessions.** When something worth an alert happens, the plugin also calls Emby's `ISessionManager.SendMessageToAdminSessions(name, data, cancellation)`. The message arrives as `{"MessageType":"HallPass.ScanFinished","Data":{...}}` on the websocket of every connected **administrator** session. A non-administrator session and a socket opened with only an API key get nothing. It is fire and forget: the sender logs a failure and swallows it, so an alert can never break a scan or a write job. Only sockets that carry the token in the address (`?api_key=`), such as Emby's own web dashboard, receive this; the app does not rely on it.
+3. **Catch-up.** Every event gets a number `Seq` and is kept in a small log (the last 500 events). `GET /emby/HallPass/Events?After=<seq>&Limit=100` returns what an app missed. The app dedupes by `Seq`.
+4. **Catalog.** `GET /emby/HallPass/Notifications/Catalog` describes every event (title, description, parameters, suggested rule, lock-screen text) so the app can build its rule screen from the server.
 
 All routes need an administrator token in `X-Emby-Token`. There is no separate key.
 
@@ -40,6 +41,16 @@ Details that the table cannot say:
 ## 5. The catch-up route
 `GET /emby/HallPass/Events?After=<seq>&Limit=100` returns `{ LatestSeq, Truncated, Events: [ { Seq, Name, AtUtc, Data } ] }`, oldest first, from a log of the last 500 events. `Limit` defaults to 100 and is never more than 500; `After` defaults to 0. `Truncated: true` means the log no longer reaches back that far (the app should then read `GET /emby/HallPass/Status` instead). The log is in `HallPass.Events.json` in the plugin's configuration folder, and the highest number is also kept in `HallPass.Events.json.seq`, so numbers never go back, even if the log file is damaged (a damaged file is set aside as `.corrupt`). The aggregator's memory (the remembered review queue size, announced interrupted jobs) is in `HallPass.Notifications.json`.
 
+## 5b. The events subscription (websocket)
+The app's way to receive alerts. Connect to `ws://<server>/embywebsocket?deviceId=<id>` with the administrator token in the `X-Emby-Token` header (no `api_key` in the address), then:
+- **Start:** `{"MessageType":"HallPassEventsStart","Data":"0,30000"}` or `{"MessageType":"HallPassEventsStart","Data":"0,30000,<afterSeq>"}`. The first two values are Emby's start delay and period; the optional third is the highest `Seq` the app has already seen.
+- **Stop:** `{"MessageType":"HallPassEventsStop"}`.
+- **Answer:** `{"MessageType":"HallPassEvents","Data":{"ApiLevel":1,"LatestSeq":<n>,"Truncated":false,"Events":[{"Seq":<n>,"Name":"HallPass.ScanFinished","AtUtc":"...Z","Data":{...}}]}}`. The event objects are exactly those of the catch-up route, oldest first.
+- **When it is sent:** (a) once right after the subscription: the events after `afterSeq` (at most 100, `Truncated: true` if the log no longer reaches that far), or with no `afterSeq` an empty `Events` list and `LatestSeq` as the baseline; (b) within about a second of every new event, only to subscribed sockets; (c) as a heartbeat with an empty `Events` list every 30 seconds.
+- **Who may subscribe:** an administrator. Anyone else gets exactly one message `{"MessageType":"HallPassEvents","Data":{"Error":"Administrator login required."}}` and nothing more.
+- **Per connection:** the highest `Seq` already sent is remembered, so nothing is sent twice on one connection. Subscribing again on the same socket replaces the earlier subscription, so `Start` with a new `afterSeq` replays only newer events.
+- Implemented in `Services/EventsPushListener.cs` (an Emby `BasePeriodicWebSocketListener`) with the Emby-free logic in `Core/Notifications/EventSubscription.cs`.
+
 ## 6. Where each setting lives
 | Setting | Lives in | Why |
 |---|---|---|
@@ -51,7 +62,7 @@ The saved names are `SendPhoneAlerts`, `AlertScanFinished`, `AlertScanFailed`, `
 ## 7. For the app session
 1. Gate on `Info.Features` containing `events` (and keep the existing gate on `ApiVersion` and `Version`).
 2. Build the rules from the catalog. A built-in copy of the table in section 3 is a good fallback for older plugins.
-3. Handle websocket messages whose `MessageType` starts with `HallPass.`; dedupe by `Seq`; show the generic `LockScreenText` on the lock screen.
+3. Subscribe with `HallPassEventsStart` (section 5b) and handle `HallPassEvents` messages; dedupe by `Seq`. Messages named `HallPass.<Event>` arrive only on address-token sockets; the app does not need them; show the generic `LockScreenText` on the lock screen.
 4. Keep the last seen `Seq`; on connect, on app open and from the periodic poll call `Events?After=`; if `Truncated`, read `Status`.
 5. `ReviewQueue.Count` always says how many are waiting now, so a missed event is repaired by the next one.
 

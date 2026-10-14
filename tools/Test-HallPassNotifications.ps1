@@ -32,10 +32,12 @@ $H = @{ 'X-Emby-Token' = $key }
 $results = New-Object System.Collections.ArrayList
 $backup = Join-Path $env:TEMP ('hp-live-backup-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
 $autoDir = Join-Path $MediaRoot ('hp-live-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
-$wasRunning = [bool](Get-Process | Where-Object ProcessName -eq 'EmbyServer')
+$wasRunning = $true   # set below, once Test-Server exists
 $admin = $null; $plain = $null
-$adminSock = $null; $plainSock = $null
+$adminSock = $null; $plainSock = $null; $appSock = $null; $appPlain = $null; $appIdle = $null
 $deployed = $false
+function Test-Server { @(Get-Process -Name EmbyServer -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($ServerRoot, [StringComparison]::OrdinalIgnoreCase) }) }
+$wasRunning = ((Test-Server).Count -gt 0)
 
 function Check([string]$name, [bool]$ok, [string]$detail = '') {
   [void]$results.Add([pscustomobject]@{ Name = $name; Ok = $ok; Detail = $detail })
@@ -51,28 +53,45 @@ function WaitUntil([scriptblock]$cond, [int]$seconds, [int]$every = 2) {
   while ((Get-Date) -lt $end) { if (& $cond) { return $true }; Start-Sleep $every }
   return $false
 }
+# only the shared test server's own process (another session may run a private Emby from a different folder)
+function Test-Server { @(Get-Process -Name EmbyServer -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($ServerRoot, [StringComparison]::OrdinalIgnoreCase) }) }
 function Stop-Emby {
-  Get-Process | Where-Object ProcessName -eq 'EmbyServer' | Stop-Process -Force
-  $null = WaitUntil { -not (Get-Process | Where-Object ProcessName -eq 'EmbyServer') } 30 1
+  Test-Server | Stop-Process -Force
+  $null = WaitUntil { (Test-Server).Count -eq 0 } 30 1
   Start-Sleep 3
 }
 function Start-Emby {
   # the tray program may start the server by itself; only start it if nothing came up
   Start-Sleep 6
-  if (-not (Get-Process | Where-Object ProcessName -eq 'EmbyServer')) {
-    Start-Process (Join-Path $ServerRoot 'system\EmbyServer.exe') -ArgumentList ('-programdata "' + (Join-Path $ServerRoot 'programdata') + '"') -WindowStyle Minimized
+  if ((Test-Server).Count -eq 0) {
+    $sys = Join-Path $ServerRoot 'system'
+    Start-Process (Join-Path $sys 'EmbyServer.exe') -ArgumentList ('-programdata "' + (Join-Path $ServerRoot 'programdata') + '" -ffmpeg "' + (Join-Path $sys 'ffmpeg.exe') + '" -ffprobe "' + (Join-Path $sys 'ffprobe.exe') + '" -restartexitcode 3') -WindowStyle Minimized
   }
   $up = WaitUntil { try { $null = Invoke-RestMethod -Headers $H "$base/Users"; $true } catch { $false } } 180 3
   if (-not $up) { throw 'Emby did not come up.' }
   Start-Sleep 8
 }
-function New-Sock($token, [string]$deviceId) {
+function New-Sock($token, [string]$deviceId, [switch]$AppStyle) {
   $ws = New-Object System.Net.WebSockets.ClientWebSocket
-  $ws.ConnectAsync([Uri]("ws://localhost:8096/embywebsocket?api_key=$token&deviceId=$deviceId"), [Threading.CancellationToken]::None).Wait()
+  if ($AppStyle) {
+    # the way the Embidextrous app connects: token ONLY in the X-Emby-Token header, deviceId in the address, no api_key
+    $ws.Options.SetRequestHeader('X-Emby-Token', $token)
+    $ws.ConnectAsync([Uri]("ws://localhost:8096/embywebsocket?deviceId=$deviceId"), [Threading.CancellationToken]::None).Wait()
+  } else {
+    $ws.ConnectAsync([Uri]("ws://localhost:8096/embywebsocket?api_key=$token&deviceId=$deviceId"), [Threading.CancellationToken]::None).Wait()
+  }
   return @{ Ws = $ws; Buf = (New-Object byte[] 65536); Pending = $null; Stream = (New-Object IO.MemoryStream) }
 }
 # Reads a socket for a while and returns the HallPass.* messages it saw as objects.
-function Read-Sock($s, [int]$seconds) {
+function Send-Sock($s, [string]$text) {
+  $bytes = [Text.Encoding]::UTF8.GetBytes($text)
+  $s.Ws.SendAsync([ArraySegment[byte]]$bytes, [Net.WebSockets.WebSocketMessageType]::Text, $true, [Threading.CancellationToken]::None).Wait()
+}
+# the start message: delay, period, optional afterSeq, and the token (Emby never links a header-token socket to a user, so the token travels in the message)
+function Sub-Start($s, [string]$token, [string]$after = '') { Send-Sock $s ('{"MessageType":"HallPassEventsStart","Data":"0,30000,' + $after + ',' + $token + '"}') }
+# the events carried by the HallPassEvents messages in a list (flattened)
+function Flat-Events($msgs) { @(foreach ($m in @($msgs)) { if ($m.MessageType -eq 'HallPassEvents') { foreach ($e in @($m.Data.Events)) { $e } } }) }
+function Read-Sock($s, [int]$seconds, [string]$like = 'HallPass.*') {
   $out = New-Object System.Collections.ArrayList
   $end = (Get-Date).AddSeconds($seconds)
   while ((Get-Date) -lt $end) {
@@ -82,7 +101,7 @@ function Read-Sock($s, [int]$seconds) {
       $s.Stream.Write($s.Buf, 0, $res.Count)
       if ($res.EndOfMessage) {
         $text = [Text.Encoding]::UTF8.GetString($s.Stream.ToArray()); $s.Stream.SetLength(0)
-        try { $m = $text | ConvertFrom-Json; if ($m.MessageType -like 'HallPass.*') { [void]$out.Add($m) } } catch {}
+        try { $m = $text | ConvertFrom-Json; if ($m.MessageType -like $like) { [void]$out.Add($m) } } catch {}
       }
     }
   }
@@ -108,6 +127,9 @@ function Events-Since([long]$after) { Api GET "/HallPass/Events?After=$after&Lim
 function Connect-Socks {
   $script:adminSock = New-Sock $script:adminToken 'hp-live-admin'
   $script:plainSock = New-Sock $script:plainToken 'hp-live-plain'
+  $script:appSock = New-Sock $script:adminToken 'hp-live-app' -AppStyle
+  $script:appPlain = New-Sock $script:plainToken 'hp-live-app2' -AppStyle
+  $script:appIdle = New-Sock $script:adminToken 'hp-live-app3' -AppStyle
 }
 
 try {
@@ -176,8 +198,17 @@ try {
   $script:plainToken = (Api POST '/Users/AuthenticateByName' @{ Username = 'hp-live-plain'; Pw = $pw } $hdr).AccessToken
   Connect-Socks
   Check 'Both websockets connected' ($adminSock.Ws.State -eq 'Open' -and $plainSock.Ws.State -eq 'Open')
+  Check 'The app-style sockets (token only in the header, no api_key) connected' ($appSock.Ws.State -eq 'Open' -and $appPlain.Ws.State -eq 'Open' -and $appIdle.Ws.State -eq 'Open')
   Set-Config @{ SendPhoneAlerts = $true; AlertScanFinished = $true; AlertScanFailed = $true; AlertApplyFinished = $true; AlertApplyFailed = $true; AlertReviewQueue = $true; DryRun = $true; RunMetadataSavers = $false; JournalKeepJobs = 500; BatchSize = 200; BatchDelayMs = 50 }
   $null = Read-Sock $adminSock 1; $null = Read-Sock $plainSock 1
+
+  Write-Host '-- subscribing the way the app does' 
+  $seq0 = [long](Api GET '/HallPass/Events').LatestSeq
+  Sub-Start $appSock $adminToken; Sub-Start $appPlain $plainToken
+  $first = Read-Sock $appSock 4 'HallPassEvents'
+  Check 'A subscribed administrator header-socket gets the baseline at once' (@($first).Count -ge 1 -and $first[0].Data.LatestSeq -eq $seq0 -and @($first[0].Data.Events).Count -eq 0 -and $first[0].Data.ApiLevel -eq 1 -and $first[0].Data.Truncated -eq $false) ($first | ConvertTo-Json -Compress -Depth 5)
+  $errs = Read-Sock $appPlain 4 'HallPassEvents'
+  Check 'A non-administrator who subscribes gets the Error reply and nothing more' (@($errs).Count -eq 1 -and $errs[0].Data.Error -eq 'Administrator login required.') ($errs | ConvertTo-Json -Compress -Depth 5)
 
   Write-Host '-- a scan the owner starts: summary, then the review queue went up'
   $null = Api POST '/HallPass/Scan' @{ Force = $false }
@@ -201,6 +232,13 @@ try {
   $raw = (@($msgs) | ConvertTo-Json -Depth 8)
   Check 'No alert carries a path' ($raw -notmatch '[A-Za-z]:\\' -and $raw -notmatch '\\\\' -and $raw -notmatch [regex]::Escape($MediaRoot))
   $lastSeq = [long]$ev.LatestSeq
+  $appMsgs = Read-Sock $appSock 3 'HallPassEvents'
+  $appEv = Flat-Events $appMsgs
+  Check 'The subscribed header-socket received the same events (ScanFinished and ReviewQueue) with their numbers' ((@($appEv | ForEach-Object { $_.Name }) -join ',') -eq (@($ev.Events | ForEach-Object { $_.Name }) -join ',') -and @($appEv).Count -ge 2 -and $appEv[0].Seq -eq $ev.Events[0].Seq -and $appEv[0].Data.Event -eq 'ScanFinished') ((@($appEv | ForEach-Object { $_.Name }) -join ',') + ' vs ' + (@($ev.Events | ForEach-Object { $_.Name }) -join ','))
+  Check 'No event was delivered twice on the subscribed socket' (@($appEv | Select-Object -ExpandProperty Seq -Unique).Count -eq @($appEv).Count)
+  Check 'The unsubscribed header-socket received nothing' (@(Read-Sock $appIdle 1 'HallPass*').Count -eq 0)
+  Check 'The non-administrator header-socket received nothing more' (@(Read-Sock $appPlain 1 'HallPass*').Count -eq 0)
+  $scanSeq = [long]$appEv[0].Seq
 
   Write-Host '-- a second scan with nothing new: the owner still gets a summary, the queue does not repeat'
   $null = Api POST '/HallPass/Scan' @{ Force = $false }
@@ -208,7 +246,19 @@ try {
   $m2 = Read-Sock $adminSock 4
   Check 'A scan I start reports even when nothing changed, and the queue is not announced again' ((Names $m2) -eq 'HallPass.ScanFinished' -and $m2[0].Data.Scanned -eq 0 -and $m2[0].Data.Seq -gt $lastSeq) (Names $m2)
   $lastSeq = [long](Api GET '/HallPass/Events').LatestSeq
+  $null = Read-Sock $appSock 1 'HallPassEvents'
 
+  Write-Host '-- heartbeat and resubscribing'
+  $beat = Read-Sock $appSock 40 'HallPassEvents'
+  Check 'A heartbeat (empty Events, LatestSeq) arrived within 30 seconds' (@($beat | Where-Object { @($_.Data.Events).Count -eq 0 -and $_.Data.LatestSeq -ge $lastSeq }).Count -ge 1) ([string]@($beat).Count)
+  Sub-Start $appSock $adminToken "$scanSeq"
+  $re = Read-Sock $appSock 4 'HallPassEvents'
+  $reEv = Flat-Events $re
+  Check 'Subscribing again with afterSeq replays only newer events' (@($reEv).Count -ge 1 -and @($reEv | Where-Object { $_.Seq -le $scanSeq }).Count -eq 0 -and $reEv[0].Seq -eq ($scanSeq + 1)) ((@($reEv | ForEach-Object { $_.Seq }) -join ',') + ' after ' + $scanSeq)
+  Send-Sock $appSock '{"MessageType":"HallPassEventsStop"}'
+  Start-Sleep 1
+  $null = Read-Sock $appSock 1 'HallPassEvents'
+  $stopSeq = [long](Api GET '/HallPass/Events').LatestSeq
   Write-Host '-- a cancelled scan'
   $null = Api POST '/HallPass/Scan' @{ Force = $true }
   Start-Sleep 2
@@ -219,7 +269,9 @@ try {
   if ($job.State -eq 'Completed') {
     Check 'The forced scan was too quick to cancel (not a failure of the alerts; ScanFinished sent instead)' (@($m3 | Where-Object { $_.MessageType -eq 'HallPass.ScanFinished' }).Count -eq 1) (Names $m3)
   } else {
-    Check 'ScanFailed with State Cancelled and a plain sentence' ($sf.Count -eq 1 -and $sf[0].Data.State -eq 'Cancelled' -and $sf[0].Data.Message -match 'cancelled') (Names $m3)
+    $appFail = Read-Sock $appSock 1 'HallPassEvents'
+  Check 'After HallPassEventsStop the app socket gets nothing more' (@($appFail).Count -eq 0) (@($appFail).Count.ToString())
+  Check 'ScanFailed with State Cancelled and a plain sentence' ($sf.Count -eq 1 -and $sf[0].Data.State -eq 'Cancelled' -and $sf[0].Data.Message -match 'cancelled') (Names $m3)
   }
   $null = Api POST '/HallPass/Scan' @{ Force = $true }; $null = Wait-Scan
   $null = Read-Sock $adminSock 3
@@ -332,7 +384,7 @@ catch {
 }
 finally {
   Write-Host '-- cleanup'
-  foreach ($s in @($adminSock, $plainSock)) { try { if ($s) { $s.Ws.Dispose() } } catch {} }
+  foreach ($s in @($adminSock, $plainSock, $appSock, $appPlain, $appIdle)) { try { if ($s) { $s.Ws.Dispose() } } catch {} }
   foreach ($u in @($admin, $plain)) { try { if ($u) { Invoke-RestMethod -Method Delete -Headers $H "$base/Users/$($u.Id)" | Out-Null; Write-Host "  throw-away user deleted" } } catch { Write-Host ('  could not delete a throw-away user: ' + $_.Exception.Message) -ForegroundColor Yellow } }
   try { if (Test-Path $autoDir) { [IO.Directory]::Delete($autoDir, $true); try { Invoke-RestMethod -Method Post -Headers $H "$base/Library/Refresh" | Out-Null } catch {} } } catch {}
   if ($deployed) {

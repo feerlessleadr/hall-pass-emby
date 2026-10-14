@@ -575,3 +575,96 @@ public class NotificationCatalogTests
 		Assert.Null(list[1]);
 	}
 }
+
+public class EventSubscriptionTests
+{
+	private static EventLog LogWith(int count, out string folder)
+	{
+		folder = NotificationFiles.TempFolder();
+		EventLog log = new EventLog(Path.Combine(folder, "events.json"));
+		for (int i = 0; i < count; i++)
+		{
+			log.Append(new PendingEvent(EventNames.ScanFinished, new Dictionary<string, object?> { ["Total"] = i }));
+		}
+		return log;
+	}
+
+	private static long[] Seqs(Dictionary<string, object?> body) => ((List<object>)body["Events"]!).Select((object e) => (long)((Dictionary<string, object?>)e)["Seq"]!).ToArray();
+
+	[Fact]
+	public void WithoutAfterSeqTheFirstMessageIsOnlyTheBaseline()
+	{
+		EventLog log = LogWith(3, out _);
+		EventSubscription sub = new EventSubscription(null, 0);
+		Dictionary<string, object?> first = sub.Next(log, true, 0)!;
+		Assert.Equal(3L, first["LatestSeq"]);
+		Assert.Equal(1, first["ApiLevel"]);
+		Assert.Equal(false, first["Truncated"]);
+		Assert.Empty(Seqs(first));
+		Assert.Null(sub.Next(log, true, 0)); // nothing new, no heartbeat due
+	}
+
+	[Fact]
+	public void AfterSeqReplaysOnlyNewerEventsThenNewOnesOnceEach()
+	{
+		EventLog log = LogWith(5, out _);
+		EventSubscription sub = new EventSubscription(3, 0);
+		Assert.Equal(new long[] { 4, 5 }, Seqs(sub.Next(log, true, 0)!));
+		Assert.Null(sub.Next(log, true, 0));
+		log.Append(new PendingEvent(EventNames.ScanFailed, new Dictionary<string, object?>()));
+		Dictionary<string, object?> next = sub.Next(log, true, 0)!;
+		Assert.Equal(new long[] { 6 }, Seqs(next));
+		Assert.Equal(6L, next["LatestSeq"]);
+		Assert.Null(sub.Next(log, true, 0)); // never sent twice on one connection
+	}
+
+	[Fact]
+	public void EventObjectsHaveTheCatchUpShape()
+	{
+		EventLog log = LogWith(1, out _);
+		Dictionary<string, object?> body = new EventSubscription(0, 0).Next(log, true, 0)!;
+		Dictionary<string, object?> e = (Dictionary<string, object?>)((List<object>)body["Events"]!)[0];
+		Assert.Equal(new[] { "AtUtc", "Data", "Name", "Seq" }, e.Keys.OrderBy((string k) => k, StringComparer.Ordinal).ToArray());
+		Assert.Equal("HallPass.ScanFinished", e["Name"]);
+		Assert.IsType<Dictionary<string, object?>>(e["Data"]);
+	}
+
+	[Fact]
+	public void AHeartbeatIsAnEmptyListOncePerTick()
+	{
+		EventLog log = LogWith(2, out _);
+		EventSubscription sub = new EventSubscription(null, 0);
+		sub.Next(log, true, 0);
+		Assert.Null(sub.Next(log, true, 0));
+		Dictionary<string, object?> beat = sub.Next(log, true, 1)!;
+		Assert.Empty(Seqs(beat));
+		Assert.Equal(2L, beat["LatestSeq"]);
+		Assert.Null(sub.Next(log, true, 1));
+		Assert.NotNull(sub.Next(log, true, 2));
+	}
+
+	[Fact]
+	public void ANonAdministratorGetsTheErrorOnceAndNothingElse()
+	{
+		EventLog log = LogWith(2, out _);
+		EventSubscription sub = new EventSubscription(0, 0);
+		Dictionary<string, object?> err = sub.Next(log, false, 0)!;
+		Assert.Equal("Administrator login required.", err["Error"]);
+		Assert.Single(err);
+		Assert.Null(sub.Next(log, false, 1));
+		Assert.Null(sub.Next(log, false, 2));
+	}
+
+	[Fact]
+	public void TooOldAfterSeqSaysTruncated()
+	{
+		string folder = NotificationFiles.TempFolder();
+		EventLog log = new EventLog(Path.Combine(folder, "events.json"));
+		for (int i = 0; i < 520; i++)
+		{
+			log.Append(new PendingEvent(EventNames.ScanFinished, new Dictionary<string, object?>()));
+		}
+		Dictionary<string, object?> body = new EventSubscription(2, 0).Next(log, true, 0)!;
+		Assert.Equal(true, body["Truncated"]);
+	}
+}

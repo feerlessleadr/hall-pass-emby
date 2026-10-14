@@ -204,6 +204,11 @@ internal static class NotificationHost
 			{
 				Push(Events.Append(e));
 			}
+			if (pending.Count > 0)
+			{
+				// subscribed app connections (HallPassEventsStart) get the new events at once
+				EventsPushListener.NotifyChanged();
+			}
 		}
 	}
 
