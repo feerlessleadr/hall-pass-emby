@@ -62,7 +62,7 @@ Linux or Docker servers (paths, ffprobe, permissions); libraries over a few hund
 
 ## 9. Operating notes
 - Build/test: `dotnet test tests/HallPass.Tests`, `dotnet build src/HallPass -c Release` (331 tests at 1.4.0.0). Tests compile `src/HallPass/Core/**` directly (no Emby types there).
-- Test server `C:\Users\kgiglio\Downloads\embyserver-win-x64-4.10.1.0` (shared; check `/Sessions` for playback before restarting; never touch users `kevin`/`test1`; admin key in `%USERPROFILE%\.emby-spike-key`, never printed). Deploy: stop `Emby*` processes, copy the DLL to `programdata\plugins`, start `system\EmbyServer.exe -programdata <dir>` minimized, wait ~30 s. Media: `C:\claude\Music` (the owner added real files with embedded lyrics and .lrc; copyrighted, never committed).
+- Test server `%USERPROFILE%\Downloads\embyserver-win-x64-4.10.1.0` (shared; check `/Sessions` for playback before restarting; never touch users `kevin`/`test1`; admin key in `%USERPROFILE%\.emby-spike-key`, never printed). Deploy: stop `Emby*` processes, copy the DLL to `programdata\plugins`, start `system\EmbyServer.exe -programdata <dir>` minimized, wait ~30 s. Media: `C:\claude\Music` (the owner added real files with embedded lyrics and .lrc; copyrighted, never committed).
 - GitHub status without `gh`: PowerShell `Invoke-RestMethod https://api.github.com/repos/feerlessleadr/<repo>/commits/<sha>/check-runs` and `/actions/runs`, `/releases/tags/<tag>` (60 requests/hour; bash `curl` has no network).
 - No admin or UAC prompts: nothing here needs them (the owner is sometimes away).
 
