@@ -77,7 +77,7 @@ internal static class ScanJob
 			_cts = new CancellationTokenSource();
 			_status = new ScanStatus { State = "Running", Force = force, StartedUtc = DateTime.UtcNow, Message = "Starting" };
 			CancellationToken token = _cts.Token;
-			Task.Run(() => RunAsync(force, token, null));
+			Task.Run(() => RunAsync(force, token, null, RunOrigin.Manual));
 			return _status;
 		}
 	}
@@ -101,7 +101,7 @@ internal static class ScanJob
 			own = _cts.Token;
 		}
 		using CancellationTokenSource linked = CancellationTokenSource.CreateLinkedTokenSource(own, token);
-		await RunAsync(false, linked.Token, progress).ConfigureAwait(false);
+		await RunAsync(false, linked.Token, progress, RunOrigin.Scheduled).ConfigureAwait(false);
 	}
 
 	public static void Cancel()
@@ -120,7 +120,7 @@ internal static class ScanJob
 		}
 	}
 
-	private static async Task RunAsync(bool force, CancellationToken token, IProgress<double>? progress)
+	private static async Task RunAsync(bool force, CancellationToken token, IProgress<double>? progress, RunOrigin origin)
 	{
 		int processed = 0;
 		int scanned = 0;
@@ -204,6 +204,8 @@ internal static class ScanJob
 		{
 			JobGate.Exit();
 		}
+		// the scan is over (finished, cancelled or failed): tell the phone app (never throws)
+		NotificationHost.ScanEnded(Status, origin);
 	}
 
 	private static ScanStatus Copy(ScanStatus s, string? state = null, int? total = null, int? processed = null, int? scanned = null, int? unchanged = null, int? failed = null, int? removed = null, bool finished = false, string? message = null)

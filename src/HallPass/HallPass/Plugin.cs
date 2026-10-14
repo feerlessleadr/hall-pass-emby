@@ -7,6 +7,7 @@ using MediaBrowser.Common.Plugins;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.MediaEncoding;
 using MediaBrowser.Controller.Plugins;
+using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Logging;
 using MediaBrowser.Model.Plugins;
 using MediaBrowser.Model.Serialization;
@@ -33,6 +34,8 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages, IServerEntr
 
 	public IUserDataManager UserDataManager { get; }
 
+	public ISessionManager SessionManager { get; }
+
 	public override string Name => "Hall Pass";
 
 	public override string Description => "Finds explicit music and tags it, so a smart playlist can leave it out.";
@@ -40,7 +43,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages, IServerEntr
 	// Never changes: Emby identifies the plugin by this id.
 	public override Guid Id => Guid.Parse("6ca80343-2b60-40de-ab81-7a41628fcaf2");
 
-	public Plugin(IApplicationPaths appPaths, IXmlSerializer xmlSerializer, ILibraryManager libraryManager, IMediaSourceManager mediaSourceManager, ISubtitleEncoder subtitleEncoder, IFfmpegManager ffmpegManager, IUserManager userManager, IUserDataManager userDataManager, ILogManager logManager)
+	public Plugin(IApplicationPaths appPaths, IXmlSerializer xmlSerializer, ILibraryManager libraryManager, IMediaSourceManager mediaSourceManager, ISubtitleEncoder subtitleEncoder, IFfmpegManager ffmpegManager, IUserManager userManager, IUserDataManager userDataManager, ISessionManager sessionManager, ILogManager logManager)
 		: base(appPaths, xmlSerializer)
 	{
 		Instance = this;
@@ -51,6 +54,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages, IServerEntr
 		FfmpegManager = ffmpegManager;
 		UserManager = userManager;
 		UserDataManager = userDataManager;
+		SessionManager = sessionManager;
 		_logger = logManager.GetLogger("HallPass");
 	}
 
@@ -58,6 +62,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages, IServerEntr
 	public void Run()
 	{
 		AutoScan.Start();
+		NotificationHost.OnStart();
 	}
 
 	public void Dispose()
@@ -86,6 +91,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages, IServerEntr
 		{
 			// The thresholds may have changed: every decision is worked out again from the stored evidence (no rescan needed).
 			HallPassState.RedecideAll();
+			NotificationHost.ReviewBaseline();
 		}
 	}
 

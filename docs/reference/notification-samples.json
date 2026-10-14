@@ -1,0 +1,97 @@
+{
+  "_about": "Sample payloads for the Hall Pass notification contract (docs/NOTIFICATIONS.md). Use them as fixtures for parser tests. Every pushed message is {\"MessageType\": <name>, \"Data\": <object>}; the objects below are the Data part. A unit test (NotificationCatalogTests) fails when the catalog here and the real catalog differ, or when a sample is not an event the plugin can send. The values are made up.",
+  "info": {
+    "Name": "Hall Pass",
+    "Version": "1.4.0.0",
+    "ApiVersion": 1,
+    "ApiLevel": 1,
+    "Features": ["events", "catalog"]
+  },
+  "pushed": {
+    "HallPass.ScanFinished": {
+      "ApiLevel": 1, "Seq": 12, "EventId": "7c0f6c1e-5d3b-4f0a-9a52-3e2a7d5b0001", "ServerTimeUtc": "2026-10-14T18:30:12Z", "Event": "ScanFinished",
+      "Total": 5230, "Scanned": 5230, "Unchanged": 0, "Failed": 2, "NeedsReview": 517, "OnlineFailed": 3
+    },
+    "HallPass.ScanFailed": {
+      "ApiLevel": 1, "Seq": 13, "EventId": "7c0f6c1e-5d3b-4f0a-9a52-3e2a7d5b0002", "ServerTimeUtc": "2026-10-14T18:40:00Z", "Event": "ScanFailed",
+      "State": "Failed", "Message": "The scan failed: The operation has timed out."
+    },
+    "HallPass.ApplyFinished": {
+      "ApiLevel": 1, "Seq": 14, "EventId": "7c0f6c1e-5d3b-4f0a-9a52-3e2a7d5b0003", "ServerTimeUtc": "2026-10-14T19:02:45Z", "Event": "ApplyFinished",
+      "Kind": "Apply", "Changed": 4710, "Unchanged": 520, "Failed": 0, "Conflicts": 0
+    },
+    "HallPass.ApplyFailed": {
+      "ApiLevel": 1, "Seq": 15, "EventId": "7c0f6c1e-5d3b-4f0a-9a52-3e2a7d5b0004", "ServerTimeUtc": "2026-10-14T19:10:00Z", "Event": "ApplyFailed",
+      "Kind": "Apply", "State": "Interrupted", "Message": "An apply that started on 2026-10-14 at 19:02 UTC did not finish, probably because the server stopped. Tags it already wrote stay as they are; open History to see what it did and to undo it."
+    },
+    "HallPass.ReviewQueue": {
+      "ApiLevel": 1, "Seq": 16, "EventId": "7c0f6c1e-5d3b-4f0a-9a52-3e2a7d5b0005", "ServerTimeUtc": "2026-10-14T19:30:00Z", "Event": "ReviewQueue",
+      "Count": 540, "New": 23
+    }
+  },
+  "events": {
+    "LatestSeq": 16,
+    "Truncated": false,
+    "Events": [
+      {
+        "Seq": 15, "Name": "HallPass.ApplyFailed", "AtUtc": "2026-10-14T19:10:00Z",
+        "Data": { "ApiLevel": 1, "Seq": 15, "EventId": "7c0f6c1e-5d3b-4f0a-9a52-3e2a7d5b0004", "ServerTimeUtc": "2026-10-14T19:10:00Z", "Event": "ApplyFailed", "Kind": "Apply", "State": "Interrupted", "Message": "An apply that started on 2026-10-14 at 19:02 UTC did not finish, probably because the server stopped. Tags it already wrote stay as they are; open History to see what it did and to undo it." }
+      },
+      {
+        "Seq": 16, "Name": "HallPass.ReviewQueue", "AtUtc": "2026-10-14T19:30:00Z",
+        "Data": { "ApiLevel": 1, "Seq": 16, "EventId": "7c0f6c1e-5d3b-4f0a-9a52-3e2a7d5b0005", "ServerTimeUtc": "2026-10-14T19:30:00Z", "Event": "ReviewQueue", "Count": 540, "New": 23 }
+      }
+    ]
+  },
+  "catalog": {
+    "ApiLevel": 1,
+    "Service": { "Id": "HallPass", "Title": "Hall Pass", "ChannelId": "hall-pass", "ChannelTitle": "Explicit music (Hall Pass)" },
+    "Events": [
+      {
+        "Id": "HallPass.ScanFinished",
+        "Title": "A scan finished",
+        "Description": "Sent when a scan you started finishes, or when an automatic scan looked at 25 or more new or changed tracks. A few new tracks looked at quietly send nothing.",
+        "Params": [],
+        "DefaultRule": { "Enabled": true, "Params": {} },
+        "LockScreenText": "Hall Pass finished a scan.",
+        "OpensTab": "HallPass/Dashboard"
+      },
+      {
+        "Id": "HallPass.ScanFailed",
+        "Title": "A scan did not finish",
+        "Description": "Sent when a scan failed or was cancelled before it was done.",
+        "Params": [],
+        "DefaultRule": { "Enabled": true, "Params": {} },
+        "LockScreenText": "A Hall Pass scan did not finish. Unlock for details.",
+        "OpensTab": "HallPass/Dashboard"
+      },
+      {
+        "Id": "HallPass.ApplyFinished",
+        "Title": "Tags were written or put back",
+        "Description": "Sent when writing tags (Apply) or putting them back (Undo) finishes. Automatic writing after a scan sends this only when it changed 25 or more tracks.",
+        "Params": [],
+        "DefaultRule": { "Enabled": true, "Params": {} },
+        "LockScreenText": "Hall Pass finished changing tags.",
+        "OpensTab": "HallPass/History"
+      },
+      {
+        "Id": "HallPass.ApplyFailed",
+        "Title": "Writing tags did not finish",
+        "Description": "Sent when writing or putting back tags failed or was cancelled, and when a job was found unfinished after the server stopped in the middle of it.",
+        "Params": [],
+        "DefaultRule": { "Enabled": true, "Params": {} },
+        "LockScreenText": "Hall Pass could not finish changing tags. Unlock for details.",
+        "OpensTab": "HallPass/History"
+      },
+      {
+        "Id": "HallPass.ReviewQueue",
+        "Title": "More tracks are waiting for your review",
+        "Description": "Sent when the number of tracks waiting for you to decide goes up, at most once every 10 minutes.",
+        "Params": [ { "Name": "MinCount", "Label": "When this many tracks are waiting", "Type": "int", "Min": 1, "Max": 100000, "Default": 50 } ],
+        "DefaultRule": { "Enabled": false, "Params": { "MinCount": 50 } },
+        "LockScreenText": "Music is waiting for your review.",
+        "OpensTab": "HallPass/Review"
+      }
+    ]
+  }
+}

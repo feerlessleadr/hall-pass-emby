@@ -228,6 +228,7 @@
                     <button type="button" class="hp-setbtn" data-sec="hpSecLookups">Lookups</button>
                     <button type="button" class="hp-setbtn" data-sec="hpSecTags">Tags &amp; writing</button>
                     <button type="button" class="hp-setbtn" data-sec="hpSecAuto">Keeping up to date</button>
+                    <button type="button" class="hp-setbtn" data-sec="hpSecAlerts">Phone alerts</button>
                 </div>
                 <form class="hpSettingsForm">
                     <div id="hpSecScoring" class="hp-setsec">
@@ -391,9 +392,40 @@
                         </div>
                     </div>
 
+                    <div id="hpSecAlerts" class="hp-setsec hide">
+                        <div class="hp-card">
+                            <h3>Phone alerts</h3>
+                            <div class="fieldDescription">Hall Pass can tell the Embidextrous app on your phone when something happens. It uses Emby itself, with no outside service. The app decides which alerts you see and when. These switches decide what the server sends at all. An alert that is switched off is not sent and is not kept in the catch-up list. No alert ever contains a file path.</div>
+                            <div class="checkboxContainer">
+                                <label><input is="emby-checkbox" type="checkbox" id="hpAlertMaster" /><span>Send phone alerts</span></label>
+                                <div class="fieldDescription">The master switch. When it is off, nothing is sent, whatever the switches below say.</div>
+                            </div>
+                            <div class="checkboxContainer">
+                                <label><input is="emby-checkbox" type="checkbox" id="hpAlertScanDone" /><span>A scan finished</span></label>
+                                <div class="fieldDescription">Sent when a scan you started finishes, and when an automatic scan looked at 25 or more tracks. A few new tracks looked at quietly send nothing.</div>
+                            </div>
+                            <div class="checkboxContainer">
+                                <label><input is="emby-checkbox" type="checkbox" id="hpAlertScanFail" /><span>A scan did not finish</span></label>
+                                <div class="fieldDescription">Sent when a scan failed or was cancelled.</div>
+                            </div>
+                            <div class="checkboxContainer">
+                                <label><input is="emby-checkbox" type="checkbox" id="hpAlertApplyDone" /><span>Tags were written or put back</span></label>
+                                <div class="fieldDescription">Sent when Apply or Undo finishes. Writing that happens by itself after a scan is reported only when it changed 25 or more tracks.</div>
+                            </div>
+                            <div class="checkboxContainer">
+                                <label><input is="emby-checkbox" type="checkbox" id="hpAlertApplyFail" /><span>Writing tags did not finish</span></label>
+                                <div class="fieldDescription">Sent when Apply or Undo failed or was cancelled, and when a job is found unfinished after the server stopped in the middle of it.</div>
+                            </div>
+                            <div class="checkboxContainer">
+                                <label><input is="emby-checkbox" type="checkbox" id="hpAlertReview" /><span>More tracks are waiting for your review</span></label>
+                                <div class="fieldDescription">Off by default, because it can come often after a big import. Sent when the number of tracks waiting for you goes up, at most once every 10 minutes. In the app you can choose how many tracks have to be waiting.</div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div style="margin-top: 1.5em;">
                         <button is="emby-button" type="submit" class="raised button-submit block"><span>Save all settings</span></button>
-                        <div class="fieldDescription" style="margin-top: .5em;">Save covers all five sections. Saving also re-works every decision from the stored evidence. If you change the skipped genres, the word list or the lookup options, press "Rescan everything" afterwards so tracks that were already scanned are looked at again.</div>
+                        <div class="fieldDescription" style="margin-top: .5em;">Save covers all six sections. Saving also re-works every decision from the stored evidence. If you change the skipped genres, the word list or the lookup options, press "Rescan everything" afterwards so tracks that were already scanned are looked at again.</div>
                     </div>
                 </form>
             </div>

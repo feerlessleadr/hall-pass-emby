@@ -62,13 +62,13 @@ internal static class WriteJob
 
 	public static TagNames NamesFor(PluginConfiguration c) => new TagNames(c.ExplicitTag, c.CleanTag, c.LikelyCleanTag, c.ReviewTag);
 
-	public static WriteStatus StartApply()
+	public static WriteStatus StartApply(bool automatic = false)
 	{
 		if (HallPassState.Config.DryRun)
 		{
 			throw new InvalidOperationException("Dry run is on, so no tag is written. Switch it off in Settings first.");
 		}
-		return Start("apply", null, false, null);
+		return Start("apply", null, false, null, automatic);
 	}
 
 	/// <summary>Writes the tags of just these tracks (after the automatic scan of new tracks): the same rules as an apply, journalled as "auto".</summary>
@@ -78,7 +78,7 @@ internal static class WriteJob
 		{
 			throw new InvalidOperationException("Dry run is on, so no tag is written.");
 		}
-		return Start("auto", null, false, onlyIds);
+		return Start("auto", null, false, onlyIds, true);
 	}
 
 	public static WriteStatus StartUndo(string jobId, bool force)
@@ -88,10 +88,10 @@ internal static class WriteJob
 		{
 			throw new InvalidOperationException("That job is not in the journal (it may have been tidied away).");
 		}
-		return Start("undo", jobId, force, null);
+		return Start("undo", jobId, force, null, false);
 	}
 
-	private static WriteStatus Start(string kind, string? undoOf, bool force, IReadOnlyCollection<long>? onlyIds)
+	private static WriteStatus Start(string kind, string? undoOf, bool force, IReadOnlyCollection<long>? onlyIds, bool automatic)
 	{
 		lock (Gate)
 		{
@@ -103,7 +103,7 @@ internal static class WriteJob
 			string jobId = JournalStore.NewJobId();
 			_status = new WriteStatus { State = "Running", Kind = kind, JobId = jobId, StartedUtc = DateTime.UtcNow, Message = "Starting" };
 			CancellationToken token = _cts.Token;
-			Task.Run(() => RunAsync(kind, jobId, undoOf, force, onlyIds, token));
+			Task.Run(() => RunAsync(kind, jobId, undoOf, force, onlyIds, token, automatic));
 			return _status;
 		}
 	}
@@ -124,7 +124,7 @@ internal static class WriteJob
 		}
 	}
 
-	private static async Task RunAsync(string kind, string jobId, string? undoOf, bool force, IReadOnlyCollection<long>? onlyIds, CancellationToken token)
+	private static async Task RunAsync(string kind, string jobId, string? undoOf, bool force, IReadOnlyCollection<long>? onlyIds, CancellationToken token, bool automatic)
 	{
 		int total = 0, processed = 0, changed = 0, unchanged = 0, failed = 0, conflicts = 0;
 		bool cancelled = false;
@@ -197,6 +197,7 @@ internal static class WriteJob
 			journal?.Dispose();
 			JobGate.Exit();
 			Update((WriteStatus s) => Copy(s, state: "Failed", finished: true, message: "The " + kind + " failed: " + ex.Message));
+			NotificationHost.WriteEnded(Status, automatic);
 			return;
 		}
 
@@ -216,6 +217,7 @@ internal static class WriteJob
 		string verb = kind != "undo" ? "written" : "put back";
 		Update((WriteStatus s) => Copy(s, state: cancelled ? "Cancelled" : "Completed", processed: pf, changed: cf2, unchanged: uf, failed: ff, conflicts: cc, finished: true,
 			message: (cancelled ? "Cancelled: " : "Done: ") + cf2 + " " + verb + ", " + uf + " already right" + (ff > 0 ? ", " + ff + " failed" : string.Empty) + (cc > 0 ? ", " + cc + " left alone (edited since)" : string.Empty)));
+		NotificationHost.WriteEnded(Status, automatic);
 	}
 
 	/// <summary>Changes the tags of a batch in Emby (journal first, so an interruption can be undone) and says how many were saved.</summary>

@@ -684,6 +684,12 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
                 view.querySelector('#hpReadTags').checked = !!c.ReadFileTags;
                 view.querySelector('#hpAutoScan').checked = !!c.AutoScanNewTracks;
                 view.querySelector('#hpApplyAfter').checked = !!c.ApplyAfterScan;
+                view.querySelector('#hpAlertMaster').checked = c.SendPhoneAlerts !== false;
+                view.querySelector('#hpAlertScanDone').checked = c.AlertScanFinished !== false;
+                view.querySelector('#hpAlertScanFail').checked = c.AlertScanFailed !== false;
+                view.querySelector('#hpAlertApplyDone').checked = c.AlertApplyFinished !== false;
+                view.querySelector('#hpAlertApplyFail').checked = c.AlertApplyFailed !== false;
+                view.querySelector('#hpAlertReview').checked = !!c.AlertReviewQueue;
                 view.querySelector('#hpOnline').checked = !!c.OnlineEnabled;
                 view.querySelector('#hpDeezer').checked = !!c.OnlineDeezer;
                 view.querySelector('#hpITunes').checked = !!c.OnlineITunes;
@@ -804,6 +810,12 @@ define(['baseView', 'loading', 'toast', 'emby-input', 'emby-button', 'emby-selec
                 return;
             }
             c.ApplyAfterScan = applyAfter;
+            c.SendPhoneAlerts = view.querySelector('#hpAlertMaster').checked;
+            c.AlertScanFinished = view.querySelector('#hpAlertScanDone').checked;
+            c.AlertScanFailed = view.querySelector('#hpAlertScanFail').checked;
+            c.AlertApplyFinished = view.querySelector('#hpAlertApplyDone').checked;
+            c.AlertApplyFailed = view.querySelector('#hpAlertApplyFail').checked;
+            c.AlertReviewQueue = view.querySelector('#hpAlertReview').checked;
             const wasOnline = !!c.OnlineEnabled;
             c.OnlineEnabled = view.querySelector('#hpOnline').checked;
             c.OnlineDeezer = view.querySelector('#hpDeezer').checked;

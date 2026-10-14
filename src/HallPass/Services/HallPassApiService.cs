@@ -184,15 +184,57 @@ public class UndoRequest : IReturn<object>
 	public bool Force { get; set; }
 }
 
+[Authenticated(Roles = "Admin")]
+[Route("/HallPass/Events", "GET", Summary = "The phone alerts sent so far (the last 500), oldest first, so an app can catch up on what it missed.")]
+public class EventsRequest : IReturn<object>
+{
+	/// <summary>Only events with a higher number than this.</summary>
+	public long After { get; set; }
+
+	/// <summary>At most this many (default 100, never more than 500).</summary>
+	public int Limit { get; set; }
+}
+
+[Authenticated(Roles = "Admin")]
+[Route("/HallPass/Notifications/Catalog", "GET", Summary = "The phone alerts with their titles, parameters and suggested rules.")]
+public class NotificationCatalogRequest : IReturn<object>
+{
+}
+
 public class HallPassApiService : IService
 {
+	public object Get(EventsRequest request)
+	{
+		IReadOnlyList<NotificationEvent> found = NotificationHost.Events.After(Math.Max(0, request.After), request.Limit <= 0 ? 100 : request.Limit, out bool truncated);
+		return new Dictionary<string, object>
+		{
+			["LatestSeq"] = NotificationHost.Events.LatestSeq,
+			["Truncated"] = truncated,
+			["Events"] = found.Select((NotificationEvent e) => (object)new Dictionary<string, object>
+			{
+				["Seq"] = e.Seq,
+				["Name"] = e.Name,
+				["AtUtc"] = e.AtUtc.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'"),
+				["Data"] = PlainJson.ToPlain(e.Data)!,
+			}).ToList(),
+		};
+	}
+
+	public object Get(NotificationCatalogRequest request)
+	{
+		return NotificationCatalog.Build();
+	}
+
 	public object Get(InfoRequest request)
 	{
 		return new
 		{
 			Name = Plugin.Instance.Name,
 			Version = typeof(Plugin).Assembly.GetName().Version?.ToString(),
-			ApiVersion = 1
+			ApiVersion = 1,
+			// the phone app's shared notification contract (docs/NOTIFICATIONS.md); ApiVersion above is the plugin's own and stays 1
+			ApiLevel = EventNames.ApiLevel,
+			Features = new[] { "events", "catalog" }
 		};
 	}
 
@@ -381,6 +423,7 @@ public class HallPassApiService : IService
 		}
 		int changed = HallPassState.Store.SetOverride(ids, choice, HallPassState.DecisionSettingsFor(HallPassState.Config));
 		HallPassState.Save();
+		NotificationHost.ReviewBaseline();
 		return new { Changed = changed, Matched = ids.Count, Truncated = truncated };
 	}
 

@@ -87,4 +87,18 @@ public class PluginConfiguration : BasePluginConfiguration
 	public int JournalKeepJobs { get; set; } = 25;
 
 	public int JournalKeepDays { get; set; } = 30;
+
+	/// <summary>Phone alerts for the Embidextrous app (docs/NOTIFICATIONS.md): a master switch and one per event. An event that is off is neither sent nor logged.</summary>
+	public bool SendPhoneAlerts { get; set; } = true;
+
+	public bool AlertScanFinished { get; set; } = true;
+
+	public bool AlertScanFailed { get; set; } = true;
+
+	public bool AlertApplyFinished { get; set; } = true;
+
+	public bool AlertApplyFailed { get; set; } = true;
+
+	/// <summary>Off by default: after a big import it can come often. The app can add its own rule with a minimum number.</summary>
+	public bool AlertReviewQueue { get; set; }
 }

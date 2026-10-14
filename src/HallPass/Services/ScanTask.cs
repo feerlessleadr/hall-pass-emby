@@ -36,7 +36,7 @@ public class ScanTask : IScheduledTask
 		{
 			try
 			{
-				WriteJob.StartApply();
+				WriteJob.StartApply(true);
 				using (cancellationToken.Register(WriteJob.Cancel))
 				{
 					while (WriteJob.Status.State == "Running")

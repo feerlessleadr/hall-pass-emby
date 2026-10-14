@@ -146,6 +146,7 @@ public class ToolsApiService : IService
 			store.Upsert(record, HallPassState.DecisionSettingsFor(config));
 			HallPassState.Save();
 			HallPassState.SaveOnlineCache();
+			NotificationHost.ReviewBaseline();
 			return HallPassApiService.Row(store.Get(request.ItemId)!);
 		}
 		finally

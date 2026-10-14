@@ -83,6 +83,10 @@ internal static class AutoScan
 				IReadOnlyList<long> due = Queue.TakeDue(QuietMs, MaxWaitMs, BatchSize);
 				if (due.Count == 0)
 				{
+					if (Queue.Count == 0)
+					{
+						NotificationHost.AutoFlush();
+					}
 					continue;
 				}
 				PluginConfiguration config = HallPassState.Config;
@@ -98,11 +102,17 @@ internal static class AutoScan
 				List<long> looked = new List<long>();
 				try
 				{
-					looked = await ScanBatchAsync(due, config, token).ConfigureAwait(false);
+					int onlineBefore = OnlineStage.Counters.Failed;
+					(looked, int unchanged, int failed) = await ScanBatchAsync(due, config, token).ConfigureAwait(false);
+					NotificationHost.AutoBatch(due.Count, looked.Count, unchanged, failed, OnlineStage.Counters.Failed - onlineBefore);
 				}
 				finally
 				{
 					JobGate.Exit();
+				}
+				if (Queue.Count == 0)
+				{
+					NotificationHost.AutoFlush(); // everything that was waiting is done: one summary, and only if it was a big batch
 				}
 				if (looked.Count > 0 && config.ApplyAfterScan && !config.DryRun)
 				{
@@ -127,13 +137,15 @@ internal static class AutoScan
 		}
 	}
 
-	private static async Task<List<long>> ScanBatchAsync(IReadOnlyList<long> ids, PluginConfiguration config, CancellationToken token)
+	private static async Task<(List<long> Looked, int Unchanged, int Failed)> ScanBatchAsync(IReadOnlyList<long> ids, PluginConfiguration config, CancellationToken token)
 	{
 		DecisionSettings settings = HallPassState.DecisionSettingsFor(config);
 		ProfanityScanner scanner = new ProfanityScanner(HallPassState.WordListFor(config), HallPassState.ScannerOptionsFor(config));
 		string version = HallPassState.EvidenceVersionFor(config);
 		EvidenceStore store = HallPassState.Store;
 		List<long> looked = new List<long>();
+		int unchanged = 0;
+		int failed = 0;
 		foreach (long id in ids)
 		{
 			token.ThrowIfCancellationRequested();
@@ -149,6 +161,10 @@ internal static class AutoScan
 					store.Upsert(record, settings);
 					looked.Add(id);
 				}
+				else
+				{
+					unchanged++;
+				}
 			}
 			catch (OperationCanceledException)
 			{
@@ -156,6 +172,7 @@ internal static class AutoScan
 			}
 			catch (Exception ex)
 			{
+				failed++;
 				Plugin.Log("Could not scan the new track " + item.Path + ": " + ex.GetType().Name + " " + ex.Message);
 			}
 		}
@@ -167,6 +184,6 @@ internal static class AutoScan
 		{
 			Plugin.Log("Scanned " + looked.Count + " new track(s) automatically.");
 		}
-		return looked;
+		return (looked, unchanged, failed);
 	}
 }
