@@ -106,3 +106,5 @@
 
 ## 2026-10-14 (later): alerts also over a websocket subscription (still 1.4.0.0)
 - The coordinator found that `SendMessageToAdminSessions` does not reach the app (a header-token socket is not linked to a session). Added `HallPassEventsStart` / `HallPassEventsStop` / `HallPassEvents` (see `docs/NOTIFICATIONS.md` 5b and `docs/HANDOFF.md` 11b). Because Emby leaves `connection.User` empty for header-token sockets, the administrator token travels as a fourth value in the start message and is checked with the session manager. Emby's Stop removes only one subscription of a socket, so a new Start replaces older ones. Live test extended with app-style sockets; 337 unit tests.
+
+- **Released 2026-10-14:** tag `v1.4.0.0` on `6623ff6` (CI and CodeQL green); `HallPass.dll` 363,008 bytes, SHA-256 `f16cf63164d91322980f92968dcdd68903954d77881869705cb6f0c6d0400808`. The published file passed the live test (52 of 52) and the page check on the test server.
