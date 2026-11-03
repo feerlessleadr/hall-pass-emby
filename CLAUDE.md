@@ -1,5 +1,7 @@
 # Hall Pass: notes for Claude
 
+> **Persistent docs:** read `C:\dev\_docs\WORKSPACE.md` (environment, how projects connect) and `STATUS.md` here before starting. Search `DECISIONS.md` only when a past decision matters. The keep-docs-updated rules live in `C:\dev\CLAUDE.md`. Note: where this file says `C:\dev\watching-eye` is the Hall Monitor reference, that clone is deprecated; use `C:\dev\hall-monitor-emby` instead. This repo is public: no LAN addresses, internal host names, Windows user names, work email or secrets.
+
 Emby Server plugin that scans music tracks, decides whether each one is explicit (embedded flags, lyrics, online catalogs) and tags it, so a smart playlist can exclude the tag. Design: `docs/DESIGN.md` (written before any code; its Phase 0 says verify the Emby API first, and the findings win over the design). Companion: Tag Team (the bulk tag editor, https://github.com/feerlessleadr/tag-team-emby). Naming and survey decisions: `docs/PLANNING-DECISIONS.md`.
 
 ## Read first
